@@ -1,6 +1,6 @@
 {
   "name": "ronde",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
@@ -17,13 +17,13 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@ronde/backend": "0.2.0",
-    "@ronde/core": "0.2.0",
-    "@ronde/engine": "0.2.0",
-    "@ronde/fs": "0.2.0",
-    "@ronde/mem": "0.2.0",
-    "@ronde/providers": "0.2.0",
-    "@ronde/tools": "0.2.0",
+    "@ronde/backend": "0.3.0",
+    "@ronde/core": "0.3.0",
+    "@ronde/engine": "0.3.0",
+    "@ronde/fs": "0.3.0",
+    "@ronde/mem": "0.3.0",
+    "@ronde/providers": "0.3.0",
+    "@ronde/tools": "0.3.0",
     "zod": "^4.3.6"
   }
 }
