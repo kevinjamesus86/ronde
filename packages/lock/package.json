@@ -1,0 +1,38 @@
+{
+  "name": "@ronde/lock",
+  "version": "0.2.0",
+  "description": "Kernel-backed exclusive file locking for ronde runtimes",
+  "license": "Apache-2.0",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "napi": {
+    "binaryName": "ronde-lock",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu"
+    ]
+  },
+  "files": [
+    "LICENSE",
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "scripts": {
+    "build": "napi build --platform --release --no-js",
+    "build:debug": "napi build --platform --no-js",
+    "check": "cargo check"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.6.2"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

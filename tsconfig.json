@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "outDir": "dist",
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ronde/backend": ["./packages/backend/src/index.ts"],
+      "@ronde/backend/*": ["./packages/backend/src/*.ts"],
+      "@ronde/core": ["./packages/core/src/index.ts"],
+      "@ronde/core/*": ["./packages/core/src/*.ts"],
+      "@ronde/engine": ["./packages/engine/src/index.ts"],
+      "@ronde/engine/*": ["./packages/engine/src/*.ts"],
+      "@ronde/fs": ["./packages/fs/src/index.ts"],
+      "@ronde/fs/*": ["./packages/fs/src/*.ts"],
+      "@ronde/lock": ["./packages/lock/index.d.ts"],
+      "@ronde/mem": ["./packages/mem/src/index.ts"],
+      "@ronde/mem/*": ["./packages/mem/src/*.ts"],
+      "@ronde/providers": ["./packages/providers/src/index.ts"],
+      "@ronde/providers/*": ["./packages/providers/src/*.ts"],
+      "@ronde/tools": ["./packages/tools/src/index.ts"],
+      "@ronde/tools/*": ["./packages/tools/src/*.ts"],
+      "ronde": ["./packages/ronde/src/index.ts"],
+      "ronde/*": ["./packages/ronde/src/*.ts"]
+    },
+    "noEmit": true,
+    "preserveConstEnums": true
+  },
+  "include": ["packages"],
+  "exclude": ["node_modules", "dist"]
+}

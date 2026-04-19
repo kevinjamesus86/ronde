@@ -1,0 +1,69 @@
+{
+  "name": "@ronde/core",
+  "version": "0.2.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./tool": {
+      "types": "./dist/tool.d.mts",
+      "default": "./dist/tool.mjs"
+    },
+    "./result": {
+      "types": "./dist/result.d.mts",
+      "default": "./dist/result.mjs"
+    },
+    "./message": {
+      "types": "./dist/message.d.mts",
+      "default": "./dist/message.mjs"
+    },
+    "./completion": {
+      "types": "./dist/completion.d.mts",
+      "default": "./dist/completion.mjs"
+    },
+    "./journal": {
+      "types": "./dist/journal.d.mts",
+      "default": "./dist/journal.mjs"
+    },
+    "./workspace": {
+      "types": "./dist/workspace.d.mts",
+      "default": "./dist/workspace.mjs"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.mts",
+      "default": "./dist/runtime.mjs"
+    },
+    "./toolkit": {
+      "types": "./dist/toolkit.d.mts",
+      "default": "./dist/toolkit.mjs"
+    },
+    "./stream": {
+      "types": "./dist/stream.d.mts",
+      "default": "./dist/stream.mjs"
+    },
+    "./tokens": {
+      "types": "./dist/tokens.d.mts",
+      "default": "./dist/tokens.mjs"
+    },
+    "./id": {
+      "types": "./dist/id.d.mts",
+      "default": "./dist/id.mjs"
+    }
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
+  }
+}

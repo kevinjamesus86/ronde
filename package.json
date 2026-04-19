@@ -1,0 +1,100 @@
+{
+  "name": "ronde",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Agentic loop framework with multi-provider completions, composable toolkits, and structured observability",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/backend",
+    "packages/engine",
+    "packages/tools",
+    "packages/mem",
+    "packages/lock",
+    "packages/fs",
+    "packages/providers",
+    "packages/ai-sdk",
+    "packages/ronde"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./toolkit": {
+      "types": "./dist/toolkit.d.mts",
+      "default": "./dist/toolkit.mjs"
+    },
+    "./stream": {
+      "types": "./dist/stream.d.mts",
+      "default": "./dist/stream.mjs"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.mts",
+      "default": "./dist/tools/index.mjs"
+    },
+    "./journal": {
+      "types": "./dist/journal.d.mts",
+      "default": "./dist/journal.mjs"
+    },
+    "./workspace": {
+      "types": "./dist/workspace.d.mts",
+      "default": "./dist/workspace.mjs"
+    },
+    "./errors": {
+      "types": "./dist/completion/errors.d.mts",
+      "default": "./dist/completion/errors.mjs"
+    },
+    "./result": {
+      "types": "./dist/result.d.mts",
+      "default": "./dist/result.mjs"
+    }
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "bundleDependencies": [
+    "@ronde/lock"
+  ],
+  "scripts": {
+    "prepare": "node scripts/prepare.mjs",
+    "build:packages": "npm run build --workspaces --if-present",
+    "build:root": "tsdown && node scripts/strip-const-enums.js",
+    "build": "npm run build:packages && npm run build:root",
+    "typecheck": "tsc -b packages/tsconfig.packages.json",
+    "dev": "tsc -b packages/tsconfig.packages.json --watch",
+    "lint": "oxlint packages/",
+    "fmt": "oxfmt packages/ scripts/ docs/ *.md",
+    "fmt:check": "oxfmt --check packages/ scripts/ docs/ *.md",
+    "check": "npm run typecheck && oxlint packages/ && oxfmt --check packages/ scripts/ docs/ *.md",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "release": "node scripts/release.mjs",
+    "preversion": "npm run check && npm test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
+    "@google/genai": "^1.50.1",
+    "@ronde/lock": "file:packages/lock",
+    "ignore": "^7.0.5",
+    "openai": "^6",
+    "tinyglobby": "^0.2.16",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "^3.0.8",
+    "@napi-rs/cli": "^3.6.2",
+    "@types/node": "^25",
+    "lefthook": "^2.1.6",
+    "oxfmt": "^0.45.0",
+    "oxlint": "^1.60.0",
+    "semver": "^7.7.4",
+    "tsdown": "^0.21.9",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./ai-sdk" },
+    { "path": "./backend" },
+    { "path": "./core" },
+    { "path": "./engine" },
+    { "path": "./fs" },
+    { "path": "./mem" },
+    { "path": "./providers" },
+    { "path": "./tools" },
+    { "path": "./ronde" }
+  ]
+}

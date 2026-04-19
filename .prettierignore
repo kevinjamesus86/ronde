@@ -1,0 +1,4 @@
+**/dist/**
+**/.tsc/**
+**/node_modules/**
+packages/lock/target/**

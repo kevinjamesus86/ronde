@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.tsc/
+src/**/*.js
+examples/**/*.js
+*.js.map
+.cmd_*
+
+# local-only provider config (never tracked, anywhere in tree)
+providers.toml
+
+# napi-rs native build artifacts
+packages/lock/*.node
+packages/lock/target/

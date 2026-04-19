@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: false
+  jobs:
+    - name: oxfmt
+      glob: "*.{ts,js,json,md}"
+      exclude: "package-lock.json"
+      run: npx oxfmt {staged_files}
+      stage_fixed: true
+
+    - name: typecheck
+      run: npm run typecheck

@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.shared.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": ".tsc",
+    "rootDir": "..",
+    "sourceMap": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "../core" }]
+}

@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@ronde/backend": ["./backend/src/index.ts"],
+      "@ronde/core": ["./core/src/index.ts"],
+      "@ronde/core/*": ["./core/src/*.ts"],
+      "@ronde/engine": ["./engine/src/index.ts"],
+      "@ronde/fs": ["./fs/src/index.ts"],
+      "@ronde/lock": ["./lock/index.d.ts"],
+      "@ronde/mem": ["./mem/src/index.ts"],
+      "@ronde/providers": ["./providers/src/index.ts"],
+      "@ronde/tools": ["./tools/src/index.ts"],
+      "ronde": ["./ronde/src/index.ts"],
+      "ronde/*": ["./ronde/src/*.ts"]
+    }
+  }
+}
