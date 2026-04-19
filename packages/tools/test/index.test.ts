@@ -45,7 +45,7 @@ describe("@ronde/tools coreTools", () => {
     const toolkit = coreTools({
       roots: [root],
       gitignore: false,
-      shell: { sandbox: false },
+      shell: { sandbox: false, snapshot: false },
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 

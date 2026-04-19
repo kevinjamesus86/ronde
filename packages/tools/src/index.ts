@@ -18,9 +18,11 @@ import { globFiles } from "./glob-files.js"
 import { grepFiles } from "./grep-files.js"
 import { listDirectory } from "./list-directory.js"
 import { shell, type SandboxConfig } from "./shell.js"
+import type { Snapshot } from "./shell-snapshot.js"
 import type { DirectoryWorkspace } from "@ronde/core/workspace"
 
 export type { SandboxConfig } from "./shell.js"
+export type { Snapshot, ShellKind } from "./shell-snapshot.js"
 
 export interface CoreToolsOptions {
   roots: (string | import("./context.js").PathSpec)[]
@@ -29,6 +31,7 @@ export interface CoreToolsOptions {
   shell?: {
     cwd?: string
     sandbox?: boolean | SandboxConfig
+    snapshot?: boolean | Snapshot
   }
 }
 
@@ -71,6 +74,7 @@ export function coreTools(opts: CoreToolsOptions): Toolkit<DirectoryWorkspace> {
     shell(pathCtx, {
       cwd: shellOpts.cwd,
       sandbox: shellOpts.sandbox ?? true,
+      snapshot: shellOpts.snapshot ?? true,
     }),
   )
 }

@@ -13,6 +13,7 @@ describe("@ronde/tools shell output shaping", () => {
     const toolkit = shell(new PathContext([root]), {
       cwd: root,
       sandbox: false,
+      snapshot: false,
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
@@ -36,6 +37,7 @@ describe("@ronde/tools shell output shaping", () => {
     const toolkit = shell(new PathContext([root]), {
       cwd: root,
       sandbox: false,
+      snapshot: false,
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
@@ -55,7 +57,10 @@ describe("@ronde/tools shell output shaping", () => {
   })
 
   it("formats successful output directly", () => {
-    const toolkit = shell(new PathContext([tmp.dir()]), { sandbox: false })
+    const toolkit = shell(new PathContext([tmp.dir()]), {
+      sandbox: false,
+      snapshot: false,
+    })
 
     expect(
       toolkit.formatters.shell?.({
@@ -69,7 +74,10 @@ describe("@ronde/tools shell output shaping", () => {
   })
 
   it("formats truncated output with a read_file spill hint", () => {
-    const toolkit = shell(new PathContext([tmp.dir()]), { sandbox: false })
+    const toolkit = shell(new PathContext([tmp.dir()]), {
+      sandbox: false,
+      snapshot: false,
+    })
 
     const formatted = toolkit.formatters.shell?.({
       exitCode: 0,
@@ -85,7 +93,10 @@ describe("@ronde/tools shell output shaping", () => {
   })
 
   it("formats stderr and exit code on failures", () => {
-    const toolkit = shell(new PathContext([tmp.dir()]), { sandbox: false })
+    const toolkit = shell(new PathContext([tmp.dir()]), {
+      sandbox: false,
+      snapshot: false,
+    })
 
     const formatted = toolkit.formatters.shell?.({
       exitCode: 2,

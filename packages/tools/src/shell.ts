@@ -1,4 +1,4 @@
-import fs from "node:fs"
+import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { spawn } from "node:child_process"
@@ -10,6 +10,12 @@ import type { DirectoryWorkspace } from "@ronde/core/workspace"
 import type { PathContext } from "./context.js"
 import type { ShellData } from "./types.js"
 import { fsTool } from "./fs-tool.js"
+import {
+  capture as captureSnapshot,
+  detectShellKind,
+  toScript as snapshotToScript,
+  type Snapshot,
+} from "./shell-snapshot.js"
 
 const CPU_LIMIT_SEC = 60
 const TIMEOUT_MS = 65_000
@@ -22,6 +28,9 @@ type ShellArgs = z.infer<typeof parameters>
 
 interface ShellState {
   cwd: string
+  // Populated lazily on first `execute`. Undefined if snapshotting is
+  // disabled or capture failed (we fall back to a bare shell).
+  snapshotPath: string | undefined
 }
 
 /** Sandbox policy for the shell subprocess. */
@@ -37,6 +46,7 @@ export interface SandboxConfig {
 export interface ShellOptions {
   cwd?: string
   sandbox?: boolean | SandboxConfig
+  snapshot?: boolean | Snapshot
 }
 
 const parameters = z.object({
@@ -58,10 +68,16 @@ const parameters = z.object({
  * @param opts.sandbox - `true` (default) restricts writes, `false`
  *   disables sandboxing, {@link SandboxConfig} gives fine-grained
  *   control over reads/writes/network.
+ * @param opts.snapshot - `true` (default) captures the user's shell rc
+ *   state (aliases, functions, options, PATH) once on first
+ *   invocation and sources it into every subsequent command. `false`
+ *   runs commands with a bare env. Pass a {@link Snapshot} to supply
+ *   a pre-built one.
  */
 export const shell = (pathCtx: PathContext, opts: ShellOptions = {}) => {
   const initialCwd = opts.cwd ?? pathCtx.roots[0]!
   const sandbox = opts.sandbox ?? true
+  const snapshot = opts.snapshot ?? true
 
   return fsTool({
     name: "shell",
@@ -73,9 +89,15 @@ export const shell = (pathCtx: PathContext, opts: ShellOptions = {}) => {
     state: {
       init: () => ({
         cwd: initialCwd,
+        snapshotPath: undefined,
       }),
+      dispose: async (state) => {
+        if (state.snapshotPath) {
+          await fs.unlink(state.snapshotPath).catch(() => {})
+        }
+      },
     },
-    execute: (args, ctx) => run(pathCtx, sandbox, args, ctx),
+    execute: (args, ctx) => run(pathCtx, sandbox, snapshot, args, ctx),
     format,
   })
 }
@@ -83,9 +105,11 @@ export const shell = (pathCtx: PathContext, opts: ShellOptions = {}) => {
 async function run(
   pathCtx: PathContext,
   sandbox: boolean | SandboxConfig,
+  snapshot: boolean | Snapshot,
   args: ShellArgs,
   ctx: StatefulToolContext<ShellState, DirectoryWorkspace>,
 ): Promise<ToolOutput<ShellData>> {
+  await ensureSnapshot(snapshot, ctx.state)
   const raw = await runProcess(pathCtx, sandbox, args, ctx)
   if (!raw.ok) {
     return err(raw.error)
@@ -129,7 +153,7 @@ interface RawShellResult {
   totalBytes: number
 }
 
-function runProcess(
+async function runProcess(
   pathCtx: PathContext,
   sandbox: boolean | SandboxConfig,
   args: ShellArgs,
@@ -139,19 +163,25 @@ function runProcess(
   const config = typeof sandbox === "object" ? sandbox : undefined
   const profile = pathCtx.sandboxProfile(config)
   const sentinel = `__CWD_${Date.now()}__`
+  // `|| true` keeps the shell alive if the snapshot file vanished
+  // mid-session (e.g. tmpdir GC) — user gets a bare shell instead of
+  // a hard failure.
+  const snapshotLine = ctx.state.snapshotPath
+    ? `source ${shQuote(ctx.state.snapshotPath)} 2>/dev/null || true\n`
+    : ""
   const script =
+    snapshotLine +
     `ulimit -t ${CPU_LIMIT_SEC}\n` +
-    `alias python=python3\n` +
     `exec 2>&1\n` +
     `${args.command}\n` +
     `__exit=$?\n` +
     `echo "${sentinel}$(pwd)"\n` +
     `exit $__exit\n`
-  const scriptPath = path.join(ensureTmpDir(), `.cmd_${genHex()}.zsh`)
+
+  const scriptPath = path.join(await ensureTmpDir(), `.cmd_${genHex()}.zsh`)
+  await fs.writeFile(scriptPath, script, "utf-8")
 
   return new Promise((resolve) => {
-    fs.writeFileSync(scriptPath, script, "utf-8")
-
     const spawnArgs = enabled
       ? (["sandbox-exec", ["-p", profile, "zsh", scriptPath]] as const)
       : (["zsh", [scriptPath]] as const)
@@ -191,14 +221,12 @@ function runProcess(
       }, 2000)
     }, TIMEOUT_MS)
 
-    function finish(exitCode: number): void {
+    async function finish(exitCode: number): Promise<void> {
       clearTimeout(timer)
       if (killTimer) {
         clearTimeout(killTimer)
       }
-      try {
-        fs.unlinkSync(scriptPath)
-      } catch {}
+      await fs.unlink(scriptPath).catch(() => {})
 
       const sentinelIdx = stdout.lastIndexOf(sentinel)
       if (sentinelIdx !== -1) {
@@ -225,12 +253,10 @@ function runProcess(
       )
     }
 
-    child.on("close", (code) => finish(code || 0))
-    child.on("error", (e) => {
+    child.on("close", (code) => void finish(code || 0))
+    child.on("error", async (e) => {
       clearTimeout(timer)
-      try {
-        fs.unlinkSync(scriptPath)
-      } catch {}
+      await fs.unlink(scriptPath).catch(() => {})
       resolve(err(e.message))
     })
   })
@@ -253,8 +279,53 @@ function format(data: ShellData): string {
   return output
 }
 
-function ensureTmpDir(): string {
+async function ensureTmpDir(): Promise<string> {
   const dir = path.join(os.tmpdir(), ".ronde")
-  fs.mkdirSync(dir, { recursive: true })
+  await fs.mkdir(dir, { recursive: true })
   return dir
+}
+
+async function ensureSnapshot(
+  snapshot: boolean | Snapshot,
+  state: ShellState,
+): Promise<void> {
+  if (snapshot === false || state.snapshotPath !== undefined) {
+    return
+  }
+
+  const resolved = await resolveSnapshot(snapshot)
+  if (!resolved) {
+    return
+  }
+
+  const script = snapshotToScript(resolved)
+  const snapshotPath = path.join(
+    await ensureTmpDir(),
+    `snapshot-${genHex()}.sh`,
+  )
+  await fs.writeFile(snapshotPath, script, "utf-8")
+  state.snapshotPath = snapshotPath
+}
+
+async function resolveSnapshot(
+  snapshot: true | Snapshot,
+): Promise<Snapshot | undefined> {
+  if (typeof snapshot === "object") {
+    return snapshot
+  }
+  const kind = detectShellKind()
+  if (!kind) {
+    return
+  }
+  try {
+    return await captureSnapshot(kind)
+  } catch {
+    // Capture can fail on unusual rc files; fall back to a bare
+    // shell rather than breaking the tool.
+    return
+  }
+}
+
+function shQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }

@@ -18,6 +18,7 @@ describe("@ronde/tools shell", () => {
     const toolkit = shell(new PathContext([root]), {
       cwd: subdir,
       sandbox: false,
+      snapshot: false,
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
@@ -38,7 +39,10 @@ describe("@ronde/tools shell", () => {
     const root = tmp.dir()
     const subdir = path.join(root, "subdir")
     fs.mkdirSync(subdir)
-    const toolkit = shell(new PathContext([root]), { sandbox: false })
+    const toolkit = shell(new PathContext([root]), {
+      sandbox: false,
+      snapshot: false,
+    })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
     const first = await execTool(
@@ -73,7 +77,10 @@ describe("@ronde/tools shell", () => {
       os.homedir(),
       `.ronde-sandbox-test-${process.pid}.txt`,
     )
-    const toolkit = shell(new PathContext([root]), { sandbox: true })
+    const toolkit = shell(new PathContext([root]), {
+      sandbox: true,
+      snapshot: false,
+    })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
     try {
@@ -95,7 +102,10 @@ describe("@ronde/tools shell", () => {
     const root = tmp.dir()
     const outside = tmp.dir()
     const file = path.join(outside, "outside.txt")
-    const toolkit = shell(new PathContext([root]), { sandbox: false })
+    const toolkit = shell(new PathContext([root]), {
+      sandbox: false,
+      snapshot: false,
+    })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
     const result = await execTool(
@@ -111,7 +121,10 @@ describe("@ronde/tools shell", () => {
 
   it("captures command output and exit status", async () => {
     const root = tmp.dir()
-    const toolkit = shell(new PathContext([root]), { sandbox: false })
+    const toolkit = shell(new PathContext([root]), {
+      sandbox: false,
+      snapshot: false,
+    })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
     const result = await execTool(
@@ -128,6 +141,36 @@ describe("@ronde/tools shell", () => {
         exitCode: 7,
         stdout: "boom",
       })
+    }
+  })
+
+  it("applies a supplied snapshot so its functions are available", async () => {
+    const root = tmp.dir()
+    const toolkit = shell(new PathContext([root]), {
+      cwd: root,
+      sandbox: false,
+      snapshot: {
+        kind: "zsh",
+        envVars: {},
+        aliases: {},
+        functions: {
+          ronde_greet: "ronde_greet () {\n  echo ronde_hi\n}",
+        },
+        shellOptions: [],
+      },
+    })
+    const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
+
+    const result = await execTool(
+      toolkit,
+      "shell",
+      { command: "ronde_greet" },
+      workspace,
+    )
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.stdout).toBe("ronde_hi")
     }
   })
 })
