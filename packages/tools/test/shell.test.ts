@@ -144,6 +144,36 @@ describe("@ronde/tools shell", () => {
     }
   })
 
+  it("does not leak parent-process env vars into the subprocess", async () => {
+    process.env.RONDE_SECRET_LEAK_TEST = "ShouldNotAppear"
+    try {
+      const root = tmp.dir()
+      const toolkit = shell(new PathContext([root]), {
+        cwd: root,
+        sandbox: false,
+        snapshot: false,
+      })
+      const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
+
+      const result = await execTool(
+        toolkit,
+        "shell",
+        { command: "env | sort" },
+        workspace,
+      )
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.data.stdout).not.toContain("RONDE_SECRET_LEAK_TEST")
+        expect(result.data.stdout).not.toContain("ShouldNotAppear")
+        expect(result.data.stdout).toContain("TERM=dumb")
+        expect(result.data.stdout).toContain("PATH=")
+      }
+    } finally {
+      delete process.env.RONDE_SECRET_LEAK_TEST
+    }
+  })
+
   it("applies a supplied snapshot so its functions are available", async () => {
     const root = tmp.dir()
     const toolkit = shell(new PathContext([root]), {

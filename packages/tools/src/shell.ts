@@ -188,6 +188,7 @@ async function runProcess(
 
     const child = spawn(spawnArgs[0], [...spawnArgs[1]], {
       cwd: ctx.state.cwd,
+      env: spawnEnv(ctx.state),
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     })
@@ -328,4 +329,33 @@ async function resolveSnapshot(
 
 function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+// Non-interactive / deterministic hygiene for an LLM-driven shell.
+// Restricting env to this set also keeps API tokens and other
+// parent-process secrets out of the subprocess — anything not named
+// here drops on the floor at spawn time.
+const SPAWN_ENV = {
+  TERM: "dumb",
+  NO_COLOR: "1",
+  PAGER: "cat",
+  LANG: "C.UTF-8",
+  LC_ALL: "C.UTF-8",
+  NONINTERACTIVE: "1",
+  DEBIAN_FRONTEND: "noninteractive",
+  GIT_TERMINAL_PROMPT: "0",
+}
+
+function spawnEnv(state: ShellState): NodeJS.ProcessEnv {
+  if (state.snapshotPath) {
+    // Snapshot's `export` lines supply PATH/HOME/USER/SHELL.
+    return SPAWN_ENV
+  }
+  return {
+    ...SPAWN_ENV,
+    PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+    HOME: process.env.HOME ?? "/tmp",
+    USER: process.env.USER ?? "unknown",
+    SHELL: process.env.SHELL ?? "/bin/zsh",
+  }
 }
