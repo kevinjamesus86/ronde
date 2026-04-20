@@ -176,7 +176,11 @@ export async function* engine<W extends Workspace = Workspace>(
 
   const { model, effort, maxContext, maxOutput } = backend.config
   const { journal, workspace } = resolveRuntimeResources(config)
-  const runtime = deriveRuntimeBudgets(maxContext, maxOutput)
+  const compactSafetyMargin = clamp(
+    Math.floor(maxContext * 0.025),
+    4_000,
+    10_000,
+  )
   const toolkitRuntime = bindToolkitRuntime(toolkit)
 
   const abortController = new AbortController()
@@ -311,7 +315,7 @@ export async function* engine<W extends Workspace = Workspace>(
       effort,
       system,
       history,
-      maxOutput: runtime.maxOutput,
+      maxOutput,
       signal: abortSignal,
     })
 
@@ -498,7 +502,7 @@ export async function* engine<W extends Workspace = Workspace>(
               messages: turnConfig.messages,
               tools: turnConfig.toolSchemas,
               effort: turnConfig.effort,
-              maxOutput: runtime.maxOutput,
+              maxOutput,
               signal: abortSignal,
             }),
             turn,
@@ -598,18 +602,12 @@ export async function* engine<W extends Workspace = Workspace>(
         const toolResultMsg: Message = { parts: resultParts }
         await send(toolResultMsg, false)
 
-        let lastRawInputTokens = 0
-        for (const msg of turnConfig.messages) {
-          lastRawInputTokens += JSON.stringify(msg).length / 4
-        }
+        const nextTurnInput =
+          (response.usage?.inputTokens ?? 0) +
+          (response.usage?.outputTokens ?? 0) +
+          estimatedTokens
 
-        if (
-          lastRawInputTokens +
-            (response.usage?.outputTokens ?? 0) +
-            estimatedTokens +
-            runtime.compactSafetyMargin >=
-          runtime.maxContext
-        ) {
+        if (nextTurnInput + compactSafetyMargin >= maxContext) {
           yield* finalizeStep()
           const outcome = yield* attemptCompaction({
             kind: "preemptive",
@@ -676,14 +674,6 @@ export function resolveRuntimeResources<W extends Workspace>(
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
-}
-
-function deriveRuntimeBudgets(maxContext: number, maxOutput: number) {
-  return {
-    maxContext,
-    maxOutput,
-    compactSafetyMargin: clamp(Math.floor(maxContext * 0.025), 4_000, 10_000),
-  }
 }
 
 async function resolvePreStepOverrides(

@@ -561,3 +561,154 @@ describe("@ronde/engine Path B compaction boundaries", () => {
     expect(result.settleReason).toBe("max_turns")
   })
 })
+
+/*
+ * Path B threshold formula:
+ *   nextTurnInput = response.usage.inputTokens
+ *                 + response.usage.outputTokens
+ *                 + estimatedTokens   (tool result, not yet sent)
+ *   fires when: nextTurnInput + compactSafetyMargin >= maxContext
+ *
+ * compactSafetyMargin = clamp(floor(maxContext * 0.025), 4_000, 10_000)
+ * At maxContext = 100_000 → margin clamps to 4_000 (floor).
+ *
+ * So the trip line is nextTurnInput >= 96_000. The tests below set
+ * measured inputTokens on either side of that line and assert
+ * compaction fires / doesn't fire accordingly.
+ */
+describe("@ronde/engine Path B threshold formula", () => {
+  const echo = tool()({
+    name: "echo",
+    description: "Echo",
+    parameters: z.object({ text: z.string() }),
+    execute: async (args) => ok(args.text),
+  })
+
+  it("fires when measured input + output + tool-result estimate + safety margin meets maxContext", async () => {
+    let compactionCalls = 0
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          // inputTokens=99_000 + outputTokens=30 + tiny tool-result estimate
+          // + 4_000 margin ≈ 103K, well over the 100K ceiling → fires.
+          return toolResponse(
+            "echo",
+            { text: "hi" },
+            { usage: { inputTokens: 99_000, outputTokens: 30 } },
+          )
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 100_000, maxOutput: 32_000 } },
+    )
+
+    const { result } = await driveEngine(backend, {
+      prompt: "go",
+      toolkit: echo,
+      compaction: {
+        async compact() {
+          compactionCalls++
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            usage: emptyUsage(),
+          }
+        },
+      },
+    })
+
+    expect(compactionCalls).toBe(1)
+    expect(result.compactionCount).toBe(1)
+  })
+
+  it("does not fire when measured input + output + tool-result estimate + safety margin stays under maxContext", async () => {
+    let compactionCalls = 0
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          // inputTokens=50_000 + outputTokens=30 + tiny estimate + 4_000 margin
+          // ≈ 54K, well under the 100K ceiling → must not fire.
+          return toolResponse(
+            "echo",
+            { text: "hi" },
+            { usage: { inputTokens: 50_000, outputTokens: 30 } },
+          )
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 100_000, maxOutput: 32_000 } },
+    )
+
+    const { result } = await driveEngine(backend, {
+      prompt: "go",
+      toolkit: echo,
+      compaction: {
+        async compact() {
+          compactionCalls++
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            usage: emptyUsage(),
+          }
+        },
+      },
+    })
+
+    expect(compactionCalls).toBe(0)
+    expect(result.compactionCount).toBe(0)
+  })
+
+  it("does not re-fire on the next tool turn when post-compaction measured inputTokens falls below the threshold", async () => {
+    let compactionCalls = 0
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          // Near threshold — triggers compaction.
+          return toolResponse(
+            "echo",
+            { text: "hi" },
+            {
+              usage: { inputTokens: 99_000, outputTokens: 30 },
+              toolCallId: "echo-call-1",
+            },
+          )
+        }
+        if (call === 1) {
+          // Post-compaction tool turn: the provider now reports a small
+          // inputTokens for the trimmed history, so the check must pass
+          // even though we're still on a tool-using turn.
+          return toolResponse(
+            "echo",
+            { text: "ok" },
+            {
+              usage: { inputTokens: 500, outputTokens: 20 },
+              toolCallId: "echo-call-2",
+            },
+          )
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 100_000, maxOutput: 32_000 } },
+    )
+
+    const { result } = await driveEngine(backend, {
+      prompt: "go",
+      toolkit: echo,
+      compaction: {
+        async compact() {
+          compactionCalls++
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            usage: emptyUsage(),
+          }
+        },
+      },
+    })
+
+    // Exactly one compaction. If the check re-fired on turn 2 despite
+    // the drop in measured inputTokens, this would be ≥ 2.
+    expect(compactionCalls).toBe(1)
+    expect(result.compactionCount).toBe(1)
+  })
+})

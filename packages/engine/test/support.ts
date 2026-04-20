@@ -160,6 +160,7 @@ export function thinkingAndTextResponse(
 export function toolResponse(
   name: string,
   arguments_: Record<string, unknown>,
+  options: { usage?: Partial<UsageStats>; toolCallId?: string } = {},
 ): CompletionResponse {
   return {
     messages: [
@@ -167,7 +168,7 @@ export function toolResponse(
         parts: [
           {
             type: MessageType.ToolUse,
-            toolCallId: `${name}-call-1`,
+            toolCallId: options.toolCallId ?? `${name}-call-1`,
             name,
             arguments: arguments_,
           },
@@ -175,7 +176,7 @@ export function toolResponse(
       },
     ],
     stopReason: StopReason.ToolUse,
-    usage: { ...DEFAULT_USAGE, outputTokens: 30 },
+    usage: { ...DEFAULT_USAGE, outputTokens: 30, ...options.usage },
     providerMeta: null,
     warnings: [],
   }
