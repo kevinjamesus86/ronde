@@ -23,8 +23,8 @@ function request(signal?: AbortSignal): CompletionRequest {
     messages: [userMessage("hello")],
     tools: [],
     mode: CompletionMode.Agentic,
-    effort: null,
-    maxOutputTokens: 1024,
+    effort: undefined,
+    maxOutput: 1024,
     signal,
   }
 }
@@ -46,9 +46,9 @@ function backendFrom(
     specVersion: "v1",
     config: {
       model: "test-model",
-      effort: null,
-      contextWindowTokens: 32_000,
-      maxOutputTokens: 4_000,
+      effort: undefined,
+      maxContext: 32_000,
+      maxOutput: 4_000,
     },
     complete,
   }

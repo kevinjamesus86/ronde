@@ -286,10 +286,7 @@ function isGemini25Model(model: string): boolean {
   return model.startsWith("gemini-2.5-")
 }
 
-function normalizeGemini3Effort(
-  _model: string,
-  effort: Lax<Effort> | null,
-): string {
+function normalizeGemini3Effort(_model: string, effort?: Lax<Effort>): string {
   switch (effort) {
     case Effort.Low:
       return "low"
@@ -303,7 +300,7 @@ function normalizeGemini3Effort(
   }
 }
 
-function normalizeGemini25Effort(effort: Lax<Effort> | null): number {
+function normalizeGemini25Effort(effort?: Lax<Effort>): number {
   switch (effort) {
     case Effort.Low:
       return 1024
@@ -370,7 +367,7 @@ export class GeminiCompletionBackend implements CompletionBackend {
   ): AsyncGenerator<CompletionDelta, CompletionResponse, void> {
     const mode = normalizeCompletionMode(request.mode)
     const config: Record<string, unknown> = {
-      maxOutputTokens: request.maxOutputTokens,
+      maxOutputTokens: request.maxOutput,
     }
 
     if (request.system?.trim()) {

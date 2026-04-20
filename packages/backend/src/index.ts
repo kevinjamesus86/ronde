@@ -11,3 +11,4 @@ export {
   type NormalizedPart,
 } from "./shared.js"
 export { RetryingBackend, withRetry, type RetryOptions } from "./retry.js"
+export { DEFAULT_MAX_CONTEXT, DEFAULT_MAX_OUTPUT } from "./defaults.js"

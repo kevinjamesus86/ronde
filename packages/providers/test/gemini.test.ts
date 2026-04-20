@@ -40,8 +40,8 @@ const baseRequest: CompletionRequest = {
   messages: [],
   tools: [],
   mode: CompletionMode.Agentic,
-  effort: null,
-  maxOutputTokens: 256,
+  effort: undefined,
+  maxOutput: 256,
 }
 
 describe("@ronde/providers gemini descriptor", () => {

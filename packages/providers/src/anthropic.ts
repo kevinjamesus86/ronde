@@ -218,7 +218,7 @@ function anthropicModelSupportsAdaptiveThinking(model: string): boolean {
 
 function normalizeAnthropicEffort(
   model: string,
-  effort: Lax<Effort> | null,
+  effort?: Lax<Effort>,
 ): string | null {
   switch (effort) {
     case Effort.Low:
@@ -240,7 +240,7 @@ function buildPayload(
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     model: request.model,
-    max_tokens: request.maxOutputTokens,
+    max_tokens: request.maxOutput,
     messages: serializeMessages(request.messages || []),
   }
 

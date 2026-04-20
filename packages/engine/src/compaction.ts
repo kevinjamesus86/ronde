@@ -9,10 +9,10 @@ import type { Lax } from "@ronde/core"
 export interface CompactionContext {
   backend: CompletionBackend
   model: string
-  effort: Lax<Effort> | null
+  effort?: Lax<Effort>
   system?: string
   history: Message[]
-  maxOutputTokens: number
+  maxOutput: number
   signal?: AbortSignal
 }
 

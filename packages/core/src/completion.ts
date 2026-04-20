@@ -82,8 +82,8 @@ export interface CompletionRequest {
   messages: Message[]
   tools: ToolSchema[]
   mode: Lax<CompletionMode>
-  effort: Lax<Effort> | null
-  maxOutputTokens: number
+  effort?: Lax<Effort>
+  maxOutput: number
   providerOptions?: Record<string, unknown>
   signal?: AbortSignal
 }
@@ -110,9 +110,6 @@ export interface CompletionBackend {
     | Promise<CompletionResponse>
     | AsyncGenerator<CompletionDelta, CompletionResponse, void>
 }
-
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000
-export const DEFAULT_MAX_OUTPUT_TOKENS = 64_000
 
 /** Classified error kinds from completion backends. */
 export const enum CompletionErrorKind {
@@ -157,9 +154,9 @@ export class CompletionError extends Error {
 
 export interface ResolvedBackendConfig {
   model: string
-  effort: Lax<Effort> | null
-  contextWindowTokens: number
-  maxOutputTokens: number
+  effort?: Lax<Effort>
+  maxContext: number
+  maxOutput: number
 }
 
 /**

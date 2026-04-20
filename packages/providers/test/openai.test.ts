@@ -28,8 +28,8 @@ const baseRequest: CompletionRequest = {
   messages: [],
   tools: [],
   mode: CompletionMode.Agentic,
-  effort: null,
-  maxOutputTokens: 256,
+  effort: undefined,
+  maxOutput: 256,
 }
 
 class TestOpenAIBackend extends OpenAICompletionBackend {

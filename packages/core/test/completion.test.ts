@@ -78,8 +78,8 @@ describe("@ronde/core configured backend contract", () => {
       config: {
         model: "test-model",
         effort: Effort.Low,
-        contextWindowTokens: 4096,
-        maxOutputTokens: 512,
+        maxContext: 4096,
+        maxOutput: 512,
       },
       async complete() {
         return {
@@ -98,7 +98,7 @@ describe("@ronde/core configured backend contract", () => {
       tools: [],
       mode: CompletionMode.Agentic,
       effort: Effort.Low,
-      maxOutputTokens: 512,
+      maxOutput: 512,
     })
 
     expect(backend.specVersion).toBe("v1")
@@ -111,8 +111,8 @@ describe("@ronde/core configured backend contract", () => {
       config: {
         model: "test-model",
         effort: "high",
-        contextWindowTokens: 8192,
-        maxOutputTokens: 1024,
+        maxContext: 8192,
+        maxOutput: 1024,
       },
       async complete() {
         throw new Error("not used")
@@ -122,8 +122,8 @@ describe("@ronde/core configured backend contract", () => {
     expect(backend.config).toEqual({
       model: "test-model",
       effort: "high",
-      contextWindowTokens: 8192,
-      maxOutputTokens: 1024,
+      maxContext: 8192,
+      maxOutput: 1024,
     })
   })
 })

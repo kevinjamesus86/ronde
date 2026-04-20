@@ -32,8 +32,6 @@ import type {
 import {
   CompletionMode,
   StopReason,
-  DEFAULT_CONTEXT_WINDOW_TOKENS,
-  DEFAULT_MAX_OUTPUT_TOKENS,
   emptyUsage,
   type CompletionBackend,
   type CompletionDelta,
@@ -56,6 +54,8 @@ import {
   type MessagePart,
 } from "@ronde/core/message"
 import {
+  DEFAULT_MAX_CONTEXT,
+  DEFAULT_MAX_OUTPUT,
   modeWantsThoughtText,
   modeWantsThoughtReplay,
   canonicalize,
@@ -316,8 +316,8 @@ async function* completeStream(
   }
 
   const callOptions: AiSdkCallOptions = {
+    maxOutputTokens: request.maxOutput,
     prompt,
-    maxOutputTokens: request.maxOutputTokens,
   }
 
   if (request.tools?.length) {
@@ -433,10 +433,10 @@ async function* completeStream(
 }
 
 export interface AiSdkAdapterOptions {
-  /** Defaults to `DEFAULT_CONTEXT_WINDOW_TOKENS`. */
-  contextWindowTokens?: number
-  /** Defaults to `DEFAULT_MAX_OUTPUT_TOKENS`. */
-  maxOutputTokens?: number
+  /** Defaults to `DEFAULT_MAX_CONTEXT`. */
+  maxContext?: number
+  /** Defaults to `DEFAULT_MAX_OUTPUT`. */
+  maxOutput?: number
 }
 
 /**
@@ -470,10 +470,8 @@ export function fromAiSdk(
     ...backend,
     config: {
       model: model.modelId,
-      effort: null,
-      contextWindowTokens:
-        options.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS,
-      maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      maxContext: options.maxContext ?? DEFAULT_MAX_CONTEXT,
+      maxOutput: options.maxOutput ?? DEFAULT_MAX_OUTPUT,
     },
   }
 }

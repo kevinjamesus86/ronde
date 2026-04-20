@@ -342,7 +342,7 @@ function isNativeOpenAI(resolved: InternalBackendConfig): boolean {
   return resolved.nativeOpenAI
 }
 
-function normalizeOpenAIEffort(effort: Lax<Effort> | null): string | null {
+function normalizeOpenAIEffort(effort?: Lax<Effort>): string | null {
   switch (effort) {
     case Effort.Low:
       return "low"
@@ -395,7 +395,7 @@ export class OpenAICompletionBackend implements CompletionBackend {
       instructions: request.system,
       input: serializeMessages(request.messages || [], this.serializeOptions()),
       tools: serializeTools(request.tools),
-      max_output_tokens: request.maxOutputTokens,
+      max_output_tokens: request.maxOutput,
     }
 
     const effort = normalizeOpenAIEffort(request.effort)

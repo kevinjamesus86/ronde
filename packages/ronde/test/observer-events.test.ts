@@ -32,7 +32,7 @@ describe("@ronde observer events", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     await agentic(backend, {
@@ -73,7 +73,7 @@ describe("@ronde observer events", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     await agentic(backend, {
@@ -137,7 +137,7 @@ describe("@ronde observer events", () => {
           "too many tokens",
         )
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     await agentic(backend, {

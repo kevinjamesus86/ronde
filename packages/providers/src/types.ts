@@ -8,16 +8,16 @@ import type { Lax } from "@ronde/core"
 export interface BackendConfig {
   provider: string
   model: string
-  apiKey: string
+  apiKey?: string
   baseURL?: string
   effort?: Lax<Effort>
-  contextWindowTokens?: number
-  maxOutputTokens?: number
+  maxContext?: number
+  maxOutput?: number
 }
 
 export interface InternalBackendConfig {
   /** True only for first-party OpenAI — gates reasoning features. */
   nativeOpenAI: boolean
   apiKey: string
-  baseURL: string | undefined
+  baseURL?: string
 }

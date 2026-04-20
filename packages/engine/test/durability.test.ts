@@ -292,7 +292,7 @@ describe("@ronde/engine commit boundaries", () => {
               tools: [],
               mode: CompletionMode.Compaction,
               effort: ctx.effort,
-              maxOutputTokens: ctx.maxOutputTokens,
+              maxOutput: ctx.maxOutput,
               signal: ctx.signal,
             })
             return {
@@ -334,7 +334,7 @@ describe("@ronde/engine commit boundaries", () => {
           }
           return textResponse("done")
         },
-        { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+        { config: { maxContext: 1000, maxOutput: 200 } },
       ),
       {
         prompt: "go",
@@ -354,7 +354,7 @@ describe("@ronde/engine commit boundaries", () => {
               tools: [],
               mode: CompletionMode.Compaction,
               effort: ctx.effort,
-              maxOutputTokens: ctx.maxOutputTokens,
+              maxOutput: ctx.maxOutput,
               signal: ctx.signal,
             })
             return {

@@ -18,10 +18,10 @@ describe("@ronde DefaultCompactionStrategy", () => {
     await strategy.compact({
       backend,
       model: "mock",
-      effort: null,
+      effort: undefined,
       system: "system prompt",
       history: [userMessage("prior")],
-      maxOutputTokens: 1000,
+      maxOutput: 1000,
     })
 
     const request = backend.requests[0]!
@@ -48,10 +48,10 @@ describe("@ronde DefaultCompactionStrategy", () => {
     await strategy.compact({
       backend,
       model: "mock",
-      effort: null,
+      effort: undefined,
       system: "system prompt",
       history: [userMessage("first"), userMessage("second")],
-      maxOutputTokens: 1000,
+      maxOutput: 1000,
     })
 
     expect(backend.requests).toHaveLength(2)
@@ -77,7 +77,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
     await strategy.compact({
       backend,
       model: "mock",
-      effort: null,
+      effort: undefined,
       system: "system prompt",
       history: [
         userMessage("keep"),
@@ -103,7 +103,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
         },
         userMessage("tail"),
       ],
-      maxOutputTokens: 1000,
+      maxOutput: 1000,
     })
 
     const retriedHistory = backend.requests[2]!.messages
@@ -134,10 +134,10 @@ describe("@ronde DefaultCompactionStrategy", () => {
     const result = await strategy.compact({
       backend,
       model: "mock",
-      effort: null,
+      effort: undefined,
       system: "system prompt",
       history: [userMessage("prior")],
-      maxOutputTokens: 1000,
+      maxOutput: 1000,
     })
 
     expect(result).toEqual({
@@ -153,10 +153,10 @@ describe("@ronde DefaultCompactionStrategy", () => {
     const result = await strategy.compact({
       backend,
       model: "mock",
-      effort: null,
+      effort: undefined,
       system: "system prompt",
       history: [userMessage("prior")],
-      maxOutputTokens: 1000,
+      maxOutput: 1000,
     })
 
     expect(result.kind).toBe("compacted")
@@ -181,10 +181,10 @@ describe("@ronde DefaultCompactionStrategy", () => {
     const result = await strategy.compact({
       backend,
       model: "mock",
-      effort: null,
+      effort: undefined,
       system: "system prompt",
       history: [userMessage("prior")],
-      maxOutputTokens: 1000,
+      maxOutput: 1000,
     })
 
     expect(result.usage.inputTokens).toBe(50)

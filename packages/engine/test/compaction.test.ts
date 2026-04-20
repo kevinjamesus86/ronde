@@ -26,7 +26,7 @@ describe("@ronde/engine compaction integration", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     const { result } = await driveEngine(backend, {
@@ -57,7 +57,7 @@ describe("@ronde/engine compaction integration", () => {
           }
           return textResponse("done")
         },
-        { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+        { config: { maxContext: 1000, maxOutput: 200 } },
       ),
       {
         journal: runtime.journal,
@@ -108,7 +108,7 @@ describe("@ronde/engine compaction integration", () => {
           }
           return textResponse("done")
         },
-        { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+        { config: { maxContext: 1000, maxOutput: 200 } },
       ),
       {
         prompt: "go",
@@ -143,7 +143,7 @@ describe("@ronde/engine compaction integration", () => {
           }
           return textResponse("done")
         },
-        { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+        { config: { maxContext: 1000, maxOutput: 200 } },
       ),
       {
         prompt: "go",
@@ -173,7 +173,7 @@ describe("@ronde/engine compaction integration", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     await driveEngine(backend, {
@@ -206,7 +206,7 @@ describe("@ronde/engine buffered-turn compaction", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     await driveEngine(backend, {
@@ -245,7 +245,7 @@ describe("@ronde/engine buffered-turn compaction", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     await driveEngine(backend, {
@@ -279,7 +279,7 @@ describe("@ronde/engine buffered-turn compaction", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     await driveEngine(backend, {
@@ -318,7 +318,7 @@ describe("@ronde/engine compaction breaker", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     const { result, events } = await driveEngine(backend, {
@@ -353,7 +353,7 @@ describe("@ronde/engine compaction breaker", () => {
   it("stops invoking compaction after the breaker threshold", async () => {
     let compactionCalls = 0
     const backend = mockHandler(() => contextLengthExceeded(), {
-      config: { contextWindowTokens: 1000, maxOutputTokens: 200 },
+      config: { maxContext: 1000, maxOutput: 200 },
     })
 
     const { result, events } = await driveEngine(backend, {
@@ -378,7 +378,7 @@ describe("@ronde/engine compaction breaker", () => {
   it("settles with compaction_failed when the breaker trips", async () => {
     const { result, events } = await driveEngine(
       mockHandler(() => contextLengthExceeded(), {
-        config: { contextWindowTokens: 1000, maxOutputTokens: 200 },
+        config: { maxContext: 1000, maxOutput: 200 },
       }),
       {
         prompt: "go",
@@ -426,7 +426,7 @@ describe("@ronde/engine Path B compaction boundaries", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     const { result, events } = await driveEngine(backend, {
@@ -447,7 +447,7 @@ describe("@ronde/engine Path B compaction boundaries", () => {
   it("trips the breaker after 3 not_compacted results from Path B", async () => {
     let compactionCalls = 0
     const backend = mockHandler(() => toolResponse("echo", { text: "hi" }), {
-      config: { contextWindowTokens: 1000, maxOutputTokens: 200 },
+      config: { maxContext: 1000, maxOutput: 200 },
     })
 
     const { result, events } = await driveEngine(backend, {
@@ -483,7 +483,7 @@ describe("@ronde/engine Path B compaction boundaries", () => {
         }
         return textResponse("done")
       },
-      { config: { contextWindowTokens: 1000, maxOutputTokens: 200 } },
+      { config: { maxContext: 1000, maxOutput: 200 } },
     )
 
     const { journal } = await driveEngine(backend, {
@@ -529,7 +529,7 @@ describe("@ronde/engine Path B compaction boundaries", () => {
     // the fourth refusal must NOT trip the 3-strike breaker, because
     // the successful compact in between resets the counter.
     const backend = mockHandler(() => toolResponse("echo", { text: "hi" }), {
-      config: { contextWindowTokens: 1000, maxOutputTokens: 200 },
+      config: { maxContext: 1000, maxOutput: 200 },
     })
 
     const { result } = await driveEngine(backend, {

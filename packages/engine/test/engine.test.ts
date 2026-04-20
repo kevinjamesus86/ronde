@@ -203,7 +203,7 @@ describe("@ronde/engine settle reasons", () => {
   it("settles with compaction_failed after repeated compaction failure", async () => {
     const { result } = await driveEngine(
       mockHandler(() => contextLengthExceeded(), {
-        config: { contextWindowTokens: 1000, maxOutputTokens: 200 },
+        config: { maxContext: 1000, maxOutput: 200 },
       }),
       {
         prompt: "go",

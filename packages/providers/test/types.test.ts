@@ -21,13 +21,13 @@ describe("@ronde/providers backend config contract", () => {
       model: "claude-sonnet-4-6",
       apiKey: "secret",
       effort: Effort.High,
-      contextWindowTokens: 300_000,
-      maxOutputTokens: 8_000,
+      maxContext: 300_000,
+      maxOutput: 8_000,
     } satisfies BackendConfig
 
     expect(config.effort).toBe(Effort.High)
-    expect(config.contextWindowTokens).toBe(300_000)
-    expect(config.maxOutputTokens).toBe(8_000)
+    expect(config.maxContext).toBe(300_000)
+    expect(config.maxOutput).toBe(8_000)
   })
 
   it("allows optional baseURL overrides", () => {

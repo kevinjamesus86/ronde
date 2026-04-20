@@ -21,8 +21,8 @@ const baseRequest: CompletionRequest = {
   messages: [assistantMessage([thinkingPart("private")])],
   tools: [],
   mode: CompletionMode.Agentic,
-  effort: null,
-  maxOutputTokens: 256,
+  effort: undefined,
+  maxOutput: 256,
 }
 
 class TestLlamaBackend extends LlamaCppCompletionBackend {

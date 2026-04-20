@@ -90,8 +90,8 @@ describe("@ronde/engine hook contracts", () => {
           totalCachedTokens: 0,
         },
         budget: {
-          contextWindowTokens: 4096,
-          maxOutputTokens: 512,
+          maxContext: 4096,
+          maxOutput: 512,
         },
         compactionCount: 0,
       }),

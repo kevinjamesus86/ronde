@@ -67,9 +67,9 @@ export async function withEnv<T>(
 
 const DEFAULT_CONFIG: ResolvedBackendConfig = {
   model: "mock-model",
-  effort: null,
-  contextWindowTokens: 200_000,
-  maxOutputTokens: 64_000,
+  effort: undefined,
+  maxContext: 200_000,
+  maxOutput: 64_000,
 }
 
 export function mockBackend(

@@ -31,7 +31,7 @@ import type {
   EngineHooks,
   SettleReason,
 } from "@ronde/engine"
-import { createBackend, allProviders, getProvider } from "@ronde/providers"
+import { createBackend, allProviders } from "@ronde/providers"
 import { DefaultCompactionStrategy } from "./compaction.js"
 import { createRuntime } from "./default-runtime.js"
 import { openRuntime, type ManagedRuntimeOptions } from "./managed-runtime.js"
@@ -73,30 +73,19 @@ function parseModelString(model: string): {
   )
 }
 
-function resolveApiKey(provider: string): string {
-  const desc = getProvider(provider)
-  if (!desc?.envVar) {
-    return "local"
-  }
-  const key = process.env[desc.envVar]
-  if (!key) {
-    throw new Error(
-      `Missing ${desc.envVar} environment variable ` +
-        `for provider "${provider}".`,
-    )
-  }
-  return key
-}
-
 function buildBackend(modelStr: string): ConfiguredBackend {
   const { provider, model } = parseModelString(modelStr)
-  const apiKey = resolveApiKey(provider)
-  return withRetry(createBackend({ provider, model, apiKey }))
+  return withRetry(
+    createBackend({
+      provider,
+      model,
+    }),
+  )
 }
 
 const emptyToolkit: Toolkit = {
-  schemas: [],
   execute: async (name) => err(`Tool "${name}" not found`),
+  schemas: [],
   formatters: {},
 }
 

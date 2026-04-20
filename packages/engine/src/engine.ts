@@ -75,7 +75,7 @@ interface TurnConfig {
   messages: Message[]
   toolSchemas: ToolSchema[]
   model: string
-  effort: Lax<Effort> | null
+  effort?: Lax<Effort>
 }
 
 /**
@@ -175,9 +175,9 @@ export async function* engine<W extends Workspace = Workspace>(
     compaction,
   } = config
 
-  const { model, effort, contextWindowTokens, maxOutputTokens } = backend.config
+  const { model, effort, maxContext, maxOutput } = backend.config
   const { journal, workspace } = resolveRuntimeResources(config)
-  const runtime = deriveRuntimeBudgets(contextWindowTokens, maxOutputTokens)
+  const runtime = deriveRuntimeBudgets(maxContext, maxOutput)
   const toolkitRuntime = bindToolkitRuntime(toolkit)
 
   const abortController = new AbortController()
@@ -312,7 +312,7 @@ export async function* engine<W extends Workspace = Workspace>(
       effort,
       system,
       history,
-      maxOutputTokens: runtime.compactMaxOutputTokens,
+      maxOutput: runtime.compactMaxOutputTokens,
       signal: abortSignal,
     })
 
@@ -479,7 +479,7 @@ export async function* engine<W extends Workspace = Workspace>(
               totalOutputTokens,
               totalCachedTokens,
             },
-            budget: { contextWindowTokens, maxOutputTokens },
+            budget: { maxContext, maxOutput },
             compactionCount,
           },
           {
@@ -500,7 +500,7 @@ export async function* engine<W extends Workspace = Workspace>(
               tools: turnConfig.toolSchemas,
               mode: CompletionMode.Agentic,
               effort: turnConfig.effort,
-              maxOutputTokens: runtime.maxOutputTokens,
+              maxOutput: runtime.maxOutput,
               signal: abortSignal,
             }),
             turn,
@@ -610,7 +610,7 @@ export async function* engine<W extends Workspace = Workspace>(
             (response.usage?.outputTokens ?? 0) +
             estimatedTokens +
             runtime.compactSafetyMarginTokens >=
-          runtime.contextWindowTokens
+          runtime.maxContext
         ) {
           yield* finalizeStep()
           const outcome = yield* attemptCompaction({
@@ -680,20 +680,13 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
 }
 
-function deriveRuntimeBudgets(
-  contextWindowTokens: number,
-  maxOutputTokens: number,
-) {
+function deriveRuntimeBudgets(maxContext: number, maxOutput: number) {
   return {
-    contextWindowTokens,
-    maxOutputTokens,
-    compactMaxOutputTokens: clamp(
-      Math.floor(maxOutputTokens / 4),
-      4_000,
-      16_000,
-    ),
+    maxContext,
+    maxOutput,
+    compactMaxOutputTokens: clamp(Math.floor(maxOutput / 4), 4_000, 16_000),
     compactSafetyMarginTokens: clamp(
-      Math.floor(contextWindowTokens * 0.025),
+      Math.floor(maxContext * 0.025),
       4_000,
       10_000,
     ),
@@ -716,7 +709,7 @@ async function resolvePreStepOverrides(
     messages: result.messages ?? defaults.messages,
     toolSchemas: result.toolSchemas ?? defaults.toolSchemas,
     model: result.model ?? defaults.model,
-    effort: result.effort !== undefined ? result.effort : defaults.effort,
+    effort: result.effort ?? defaults.effort,
   }
 }
 

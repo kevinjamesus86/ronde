@@ -35,8 +35,8 @@ export interface PreStepInput {
     totalCachedTokens: number
   }
   budget: {
-    contextWindowTokens: number
-    maxOutputTokens: number
+    maxContext: number
+    maxOutput: number
   }
   compactionCount: number
 }
@@ -45,7 +45,7 @@ export interface PreStepResult {
   messages?: Message[]
   toolSchemas?: ToolSchema[]
   model?: string
-  effort?: Lax<Effort> | null
+  effort?: Lax<Effort>
 }
 
 export interface EngineHooks {

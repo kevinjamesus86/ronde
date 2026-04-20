@@ -44,8 +44,8 @@ describe("@ronde/engine preStep hook", () => {
         totalCachedTokens: 0,
       },
       budget: expect.objectContaining({
-        contextWindowTokens: expect.any(Number),
-        maxOutputTokens: expect.any(Number),
+        maxContext: expect.any(Number),
+        maxOutput: expect.any(Number),
       }),
       compactionCount: 0,
     })
@@ -183,16 +183,12 @@ describe("@ronde/engine preStep hook", () => {
     })
     expect(backend.requests[1]).toMatchObject({
       model: "mock",
-      effort: null,
+      effort: undefined,
     })
   })
 
-  it("distinguishes effort=null (explicit) from an omitted override", async () => {
-    const backend = mockBackend([
-      textResponse("explicit"),
-      textResponse("omit"),
-    ])
-    let call = 0
+  it("falls through to the configured effort when preStep omits it", async () => {
+    const backend = mockBackend([textResponse("one"), textResponse("two")])
 
     await driveEngine(backend, {
       prompt: "go",
@@ -205,22 +201,14 @@ describe("@ronde/engine preStep hook", () => {
         formatters: {},
       },
       hooks: {
-        preStep: () => {
-          const first = call === 0
-          call++
-          // Turn 1 explicitly returns null; turn 2 omits the key
-          // entirely. The engine's `effort !== undefined` check must
-          // treat these two forms distinctly.
-          return first ? { effort: null } : {}
-        },
+        // Both turns omit effort. The merge must leave model/effort/etc
+        // at their configured defaults, not clobber them with undefined.
+        preStep: () => ({}),
         postStep: (step) => (step.turn === 1 ? "continue" : undefined),
       },
     })
 
-    expect(backend.requests[0]?.effort).toBe(null)
-    // Omitted key falls through to the configured default. If the
-    // engine had treated {} as "override everything to undefined",
-    // the model would disappear along with effort.
+    expect(backend.requests[0]?.model).toBe("mock")
     expect(backend.requests[1]?.model).toBe("mock")
   })
 })

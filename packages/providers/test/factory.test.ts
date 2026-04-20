@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
-import {
-  DEFAULT_CONTEXT_WINDOW_TOKENS,
-  DEFAULT_MAX_OUTPUT_TOKENS,
-  Effort,
-  StopReason,
-  emptyUsage,
-} from "@ronde/core/completion"
+import { Effort, StopReason, emptyUsage } from "@ronde/core/completion"
+import { DEFAULT_MAX_CONTEXT, DEFAULT_MAX_OUTPUT } from "@ronde/backend"
 import { createBackend } from "../src/factory.js"
 import { registerProvider } from "../src/registry.js"
 
@@ -51,10 +46,8 @@ describe("@ronde/providers createBackend", () => {
       apiKey: "secret",
     })
 
-    expect(backend.config.contextWindowTokens).toBe(
-      DEFAULT_CONTEXT_WINDOW_TOKENS,
-    )
-    expect(backend.config.maxOutputTokens).toBe(DEFAULT_MAX_OUTPUT_TOKENS)
+    expect(backend.config.maxContext).toBe(DEFAULT_MAX_CONTEXT)
+    expect(backend.config.maxOutput).toBe(DEFAULT_MAX_OUTPUT)
   })
 
   it("preserves explicit token budgets when provided", () => {
@@ -62,12 +55,12 @@ describe("@ronde/providers createBackend", () => {
       provider: "anthropic",
       model: "claude-sonnet-4-6",
       apiKey: "secret",
-      contextWindowTokens: 400_000,
-      maxOutputTokens: 16_000,
+      maxContext: 400_000,
+      maxOutput: 16_000,
     })
 
-    expect(backend.config.contextWindowTokens).toBe(400_000)
-    expect(backend.config.maxOutputTokens).toBe(16_000)
+    expect(backend.config.maxContext).toBe(400_000)
+    expect(backend.config.maxOutput).toBe(16_000)
   })
 
   it("normalizes effort onto the resolved backend config", () => {
@@ -187,8 +180,8 @@ describe("@ronde/providers createBackend", () => {
         messages: [],
         tools: [],
         mode: "agentic",
-        effort: null,
-        maxOutputTokens: 128,
+        effort: undefined,
+        maxOutput: 128,
       }),
     ).resolves.toBe(response)
     expect(complete).toHaveBeenCalledOnce()

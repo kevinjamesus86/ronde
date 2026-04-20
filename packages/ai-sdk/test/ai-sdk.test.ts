@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
   CompletionMode,
-  DEFAULT_CONTEXT_WINDOW_TOKENS,
-  DEFAULT_MAX_OUTPUT_TOKENS,
   MessageType,
   Role,
   StopReason,
@@ -11,6 +9,7 @@ import {
   thinkingPart,
   userMessage,
 } from "@ronde/core"
+import { DEFAULT_MAX_CONTEXT, DEFAULT_MAX_OUTPUT } from "@ronde/backend"
 import { drain } from "@ronde/core/stream"
 import { fromAiSdk } from "../src/index.js"
 
@@ -127,8 +126,8 @@ describe("@ronde/ai-sdk request conversion", () => {
         messages: [userMessage("hi")],
         tools: [],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -169,8 +168,8 @@ describe("@ronde/ai-sdk request conversion", () => {
         ],
         tools: [],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -211,8 +210,8 @@ describe("@ronde/ai-sdk request conversion", () => {
         messages: [assistantWithThinking],
         tools: [],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       } as any),
     )
 
@@ -222,8 +221,8 @@ describe("@ronde/ai-sdk request conversion", () => {
         messages: [assistantWithThinking],
         tools: [],
         mode: CompletionMode.Compaction,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       } as any),
     )
 
@@ -267,8 +266,8 @@ describe("@ronde/ai-sdk request conversion", () => {
           },
         ],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -313,8 +312,8 @@ describe("@ronde/ai-sdk request conversion", () => {
           },
         ],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -359,8 +358,8 @@ describe("@ronde/ai-sdk response conversion", () => {
         messages: [userMessage("hi")],
         tools: [],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -390,8 +389,8 @@ describe("@ronde/ai-sdk response conversion", () => {
         messages: [userMessage("hi")],
         tools: [],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -417,8 +416,8 @@ describe("@ronde/ai-sdk response conversion", () => {
         messages: [userMessage("hi")],
         tools: [],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -457,8 +456,8 @@ describe("@ronde/ai-sdk response conversion", () => {
         messages: [userMessage("hi")],
         tools: [],
         mode: CompletionMode.Agentic,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
       }),
     )
 
@@ -507,10 +506,8 @@ describe("@ronde/ai-sdk adapter", () => {
     )
 
     expect(backend.config.model).toBe("model-123")
-    expect(backend.config.contextWindowTokens).toBe(
-      DEFAULT_CONTEXT_WINDOW_TOKENS,
-    )
-    expect(backend.config.maxOutputTokens).toBe(DEFAULT_MAX_OUTPUT_TOKENS)
+    expect(backend.config.maxContext).toBe(DEFAULT_MAX_CONTEXT)
+    expect(backend.config.maxOutput).toBe(DEFAULT_MAX_OUTPUT)
   })
 
   it("supports structured mode response-format requests", async () => {
@@ -536,8 +533,8 @@ describe("@ronde/ai-sdk adapter", () => {
         messages: [userMessage("hi")],
         tools: [],
         mode: CompletionMode.Structured,
-        effort: null,
-        maxOutputTokens: 100,
+        effort: undefined,
+        maxOutput: 100,
         providerOptions: {
           openai: {
             responseFormat: {
@@ -596,8 +593,8 @@ describe("@ronde/ai-sdk adapter", () => {
       messages: [userMessage("go")],
       tools: [],
       mode: CompletionMode.Agentic,
-      effort: null,
-      maxOutputTokens: 100,
+      effort: undefined,
+      maxOutput: 100,
     }) as AsyncGenerator<any, any, void>
     let next = await gen.next()
     while (!next.done) {

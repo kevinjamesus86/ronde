@@ -83,7 +83,7 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
             tools: [],
             mode: CompletionMode.Compaction,
             effort,
-            maxOutputTokens: ctx.maxOutputTokens,
+            maxOutput: ctx.maxOutput,
             signal: ctx.signal,
           }),
         )

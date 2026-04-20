@@ -49,8 +49,6 @@ export {
   CompletionMode,
   StopReason,
   Effort,
-  DEFAULT_CONTEXT_WINDOW_TOKENS,
-  DEFAULT_MAX_OUTPUT_TOKENS,
   userMessage,
   assistantMessage,
   toolResultMessage,
@@ -133,7 +131,13 @@ export type {
   CompactionResult,
 } from "@ronde/engine"
 
-export { RetryingBackend, withRetry, type RetryOptions } from "@ronde/backend"
+export {
+  RetryingBackend,
+  withRetry,
+  DEFAULT_MAX_CONTEXT,
+  DEFAULT_MAX_OUTPUT,
+  type RetryOptions,
+} from "@ronde/backend"
 export {
   registerProvider,
   getProvider,
