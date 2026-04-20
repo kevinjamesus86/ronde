@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { utf8ByteLength } from "@ronde/core/bytes"
 import { MemoryWorkspace, memoryWorkspace } from "../src/workspace.js"
 
 describe("@ronde/mem workspace spill", () => {
@@ -31,7 +32,7 @@ describe("@ronde/mem workspace spill", () => {
     const content = "abcdefghij"
     const result = await workspace.spill(content, { name: "sized" })
 
-    expect(result.bytes).toBe(Buffer.byteLength(content, "utf-8"))
+    expect(result.bytes).toBe(utf8ByteLength(content))
   })
 })
 

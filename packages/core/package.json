@@ -48,6 +48,10 @@
       "types": "./dist/tokens.d.mts",
       "default": "./dist/tokens.mjs"
     },
+    "./bytes": {
+      "types": "./dist/bytes.d.mts",
+      "default": "./dist/bytes.mjs"
+    },
     "./id": {
       "types": "./dist/id.d.mts",
       "default": "./dist/id.mjs"

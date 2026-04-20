@@ -11,6 +11,7 @@ import {
   type Toolkit,
 } from "@ronde/core/toolkit"
 import { isAsyncGenerator } from "@ronde/core/stream"
+import { utf8ByteLength } from "@ronde/core/bytes"
 import {
   Workspace,
   type SpillOpts,
@@ -755,9 +756,7 @@ class RecordingWorkspace extends Workspace {
     this.spills.push(opts)
     return {
       uri: "memory://spill",
-      preview: content,
-      truncated: false,
-      bytes: Buffer.byteLength(content, "utf8"),
+      bytes: utf8ByteLength(content),
     }
   }
 }

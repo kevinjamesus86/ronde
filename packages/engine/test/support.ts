@@ -22,6 +22,7 @@ import {
 } from "@ronde/core/message"
 import { type ToolCall } from "@ronde/core/tool"
 import { type Toolkit } from "@ronde/core/toolkit"
+import { utf8ByteLength } from "@ronde/core/bytes"
 import {
   Workspace,
   type SpillOpts,
@@ -284,7 +285,7 @@ export class TestWorkspace extends Workspace {
     this.spills.push({ content, opts })
     return {
       uri: `memory://spill/${this.spills.length}`,
-      bytes: Buffer.byteLength(content, "utf8"),
+      bytes: utf8ByteLength(content),
     }
   }
 }

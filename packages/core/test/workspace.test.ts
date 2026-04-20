@@ -8,6 +8,7 @@ import {
   type SpillResult,
   type PathSpillResult,
 } from "@ronde/core/workspace"
+import { utf8ByteLength } from "@ronde/core/bytes"
 
 describe("@ronde/core workspace contract", () => {
   it("treats spill() as the portable artifact persistence boundary", async () => {
@@ -58,7 +59,7 @@ class TestWorkspace extends Workspace {
   async spill(content: string, _opts?: SpillOpts): Promise<SpillResult> {
     return {
       uri: "memory://workspace/test",
-      bytes: Buffer.byteLength(content, "utf8"),
+      bytes: utf8ByteLength(content),
     }
   }
 }
@@ -72,7 +73,7 @@ class TestDirectoryWorkspace extends DirectoryWorkspace {
     return {
       uri: "file:///tmp/ronde/spill.txt",
       path: "/tmp/ronde/spill.txt",
-      bytes: Buffer.byteLength(content, "utf8"),
+      bytes: utf8ByteLength(content),
     }
   }
 }

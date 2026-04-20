@@ -1,32 +1,4 @@
-// Reused across calls to avoid per-call allocation. 16 KiB fits most
-// token-estimator inputs in one pass; longer strings loop without
-// reallocating.
-const _encoder = new TextEncoder()
-const _buf = new Uint8Array(16_384)
-
-function utf8ByteLength(str: string): number {
-  if (str.length === 0) {
-    return 0
-  }
-
-  let total = 0
-  let offset = 0
-
-  while (offset < str.length) {
-    const { read, written } = _encoder.encodeInto(str.slice(offset), _buf)
-
-    // Spec guarantees read > 0 for a non-empty source with a >= 4-byte
-    // buffer; guard anyway so a broken implementation can't loop forever.
-    if (read === 0) {
-      break
-    }
-
-    total += written
-    offset += read
-  }
-
-  return total
-}
+import { utf8ByteLength } from "./bytes.js"
 
 export function estimateTokens(input: string | unknown): number {
   const s = stringifyForTokenEstimate(input)

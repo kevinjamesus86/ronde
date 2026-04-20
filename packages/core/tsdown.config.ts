@@ -13,6 +13,7 @@ export default packageConfig({
     toolkit: "src/toolkit.ts",
     stream: "src/stream.ts",
     tokens: "src/tokens.ts",
+    bytes: "src/bytes.ts",
     id: "src/id.ts",
   },
 })
