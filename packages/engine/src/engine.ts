@@ -313,7 +313,6 @@ export async function* engine<W extends Workspace = Workspace>(
       backend,
       model,
       effort,
-      system,
       history,
       maxOutput,
       signal: abortSignal,

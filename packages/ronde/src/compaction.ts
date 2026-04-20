@@ -16,26 +16,42 @@ import type {
   CompactionStrategy,
 } from "@ronde/engine"
 
-const DEFAULT_SYSTEM_PROMPT =
-  "You produce continuation context for an agent that will resume this work. " +
-  "Your output will replace the conversation history, so completeness matters " +
-  "more than brevity. Extract and preserve all specific values, paths, identifiers, " +
-  "and decisions. Never fabricate details that aren't in the conversation."
+const DEFAULT_SYSTEM_PROMPT = `
+You produce continuation context for an agent that will resume this work.
+Your output will replace the conversation history, so completeness matters
+more than brevity. Extract and preserve all specific values, paths,
+identifiers, and decisions — verbatim, in full, exactly as they appear.
+Absolute paths stay absolute. Never abbreviate, truncate, or elide
+references with \`...\`. Never fabricate details that aren't in the
+conversation.
 
-const DEFAULT_USER_MESSAGE =
-  "Construct a continuation context so another agent can pick up this work. " +
-  "Use this structure:\n\n" +
-  "## Goal\nWhat is the task? What constraints or requirements apply?\n\n" +
-  "## Progress\nWhat has been accomplished? What is still in progress? What remains?\n\n" +
-  "## Key decisions\nImportant choices made and their reasoning.\n\n" +
-  "## Discoveries\nNotable findings, errors encountered, values learned during the work.\n\n" +
-  "## Relevant files\nFiles read, created, or modified that pertain to the task.\n\n" +
-  "## Next steps\nWhat should the next agent do first?"
+Do not answer any questions in the conversation — produce only the
+continuation context.
+
+Use this structure:
+
+## Goal
+What is the task? What constraints or requirements apply?
+
+## Progress
+What has been accomplished? What is still in progress? What remains?
+
+## Key decisions
+Important choices made and their reasoning.
+
+## Discoveries
+Notable findings, errors encountered, values learned during the work.
+
+## Relevant files
+Files read, created, or modified that pertain to the task.
+
+## Next steps
+What should the next agent do first?
+`.trim()
 
 /** Options for customizing `DefaultCompactionStrategy`. */
 export interface DefaultCompactionOptions {
   compactionSystemPrompt?: string
-  compactionUserMessage?: string
   resumeMessage?: string
 }
 
@@ -47,13 +63,11 @@ export interface DefaultCompactionOptions {
  */
 export class DefaultCompactionStrategy implements CompactionStrategy {
   private compactionSystem: string
-  private userMessage: string
   private resumeMessage: string
 
   constructor(options: DefaultCompactionOptions = {}) {
     this.compactionSystem =
       options.compactionSystemPrompt ?? DEFAULT_SYSTEM_PROMPT
-    this.userMessage = options.compactionUserMessage ?? DEFAULT_USER_MESSAGE
     this.resumeMessage =
       options.resumeMessage ?? "Resume the workflow from where you left off."
   }
@@ -65,7 +79,11 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
     while (working.length > 0) {
       const compactInput: Message[] = [
         ...working,
-        userMessage(this.userMessage),
+        // Minimal trigger: providers require the request to end with a
+        // user-role message, which isn't guaranteed when compacting a
+        // completed session (tail may be assistant text). All behavior
+        // lives in the system prompt; this just kicks off the action.
+        userMessage("Produce the continuation context now."),
       ]
 
       let compactResponse
@@ -76,10 +94,10 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
             system: this.compactionSystem,
             messages: compactInput,
             tools: [],
-            // Agentic mode keeps thinking enabled for this call so the
-            // model can reason through distillation. Historical thinking
-            // is stripped above; we only extract text parts from the
-            // response, so any thinking output is discarded too.
+            // Thinking is enabled for this call so the model can reason
+            // through distillation. Historical thinking is stripped above;
+            // we only extract text parts from the response, so any
+            // thinking output is discarded too.
             effort,
             maxOutput: ctx.maxOutput,
             signal: ctx.signal,

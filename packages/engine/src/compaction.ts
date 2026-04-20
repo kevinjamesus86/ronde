@@ -10,7 +10,6 @@ export interface CompactionContext {
   backend: CompletionBackend
   model: string
   effort?: Lax<Effort>
-  system?: string
   history: Message[]
   maxOutput: number
   signal?: AbortSignal
