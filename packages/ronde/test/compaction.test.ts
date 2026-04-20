@@ -25,13 +25,15 @@ describe("@ronde DefaultCompactionStrategy", () => {
     })
 
     const request = backend.requests[0]!
-    expect(request.mode).toBe(CompletionMode.Compaction)
+    // Agentic mode lets the model think while distilling.
+    expect(request.mode).toBe(CompletionMode.Agentic)
+    // Compaction system prompt drives the summary.
     expect(request.system).toContain("continuation context")
+    // No system-prompt-prepended user message — history flows through
+    // directly. First message is the history's first message.
     expect(request.messages[0]!.parts[0]!.type).toBe(MessageType.Text)
     if (request.messages[0]!.parts[0]!.type === MessageType.Text) {
-      expect(request.messages[0]!.parts[0]!.content).toContain(
-        "Original system prompt",
-      )
+      expect(request.messages[0]!.parts[0]!.content).toBe("prior")
     }
   })
 

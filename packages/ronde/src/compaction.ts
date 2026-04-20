@@ -60,15 +60,11 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
   }
 
   async compact(ctx: CompactionContext): Promise<CompactionResult> {
-    const { backend, model, effort, system, history } = ctx
-    const working = [...history]
+    const { backend, model, effort, history } = ctx
+    const working = history.map(stripThinking).filter((m) => m.parts.length > 0)
 
     while (working.length > 0) {
       const compactInput: Message[] = [
-        userMessage(
-          "## Original system prompt (for context — preserve relevant state)\n\n" +
-            system,
-        ),
         ...working,
         userMessage(this.userMessage),
       ]
@@ -81,7 +77,11 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
             system: this.compactionSystem,
             messages: compactInput,
             tools: [],
-            mode: CompletionMode.Compaction,
+            // Agentic mode keeps thinking enabled for this call so the
+            // model can reason through distillation. Historical thinking
+            // is stripped above; we only extract text parts from the
+            // response, so any thinking output is discarded too.
+            mode: CompletionMode.Agentic,
             effort,
             maxOutput: ctx.maxOutput,
             signal: ctx.signal,
@@ -131,6 +131,13 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
     }
 
     return { kind: "not_compacted", usage: emptyUsage() }
+  }
+}
+
+function stripThinking(message: Message): Message {
+  return {
+    ...message,
+    parts: message.parts.filter((p) => p.type !== MessageType.Think),
   }
 }
 

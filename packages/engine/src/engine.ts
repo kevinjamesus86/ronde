@@ -312,7 +312,7 @@ export async function* engine<W extends Workspace = Workspace>(
       effort,
       system,
       history,
-      maxOutput: runtime.compactMaxOutputTokens,
+      maxOutput: runtime.maxOutput,
       signal: abortSignal,
     })
 
@@ -609,7 +609,7 @@ export async function* engine<W extends Workspace = Workspace>(
           lastRawInputTokens +
             (response.usage?.outputTokens ?? 0) +
             estimatedTokens +
-            runtime.compactSafetyMarginTokens >=
+            runtime.compactSafetyMargin >=
           runtime.maxContext
         ) {
           yield* finalizeStep()
@@ -684,12 +684,7 @@ function deriveRuntimeBudgets(maxContext: number, maxOutput: number) {
   return {
     maxContext,
     maxOutput,
-    compactMaxOutputTokens: clamp(Math.floor(maxOutput / 4), 4_000, 16_000),
-    compactSafetyMarginTokens: clamp(
-      Math.floor(maxContext * 0.025),
-      4_000,
-      10_000,
-    ),
+    compactSafetyMargin: clamp(Math.floor(maxContext * 0.025), 4_000, 10_000),
   }
 }
 
