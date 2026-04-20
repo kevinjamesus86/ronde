@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  CompletionMode,
-  StopReason,
-  type CompletionRequest,
-} from "@ronde/core/completion"
+import { StopReason, type CompletionRequest } from "@ronde/core/completion"
 import {
   MessageType,
   Role,
@@ -20,7 +16,6 @@ const baseRequest: CompletionRequest = {
   system: "",
   messages: [assistantMessage([thinkingPart("private")])],
   tools: [],
-  mode: CompletionMode.Agentic,
   effort: undefined,
   maxOutput: 256,
 }

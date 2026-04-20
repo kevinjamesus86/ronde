@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
-import { CompletionMode, StopReason, emptyUsage } from "@ronde/core/completion"
+import { StopReason, emptyUsage } from "@ronde/core/completion"
 import { MessageType, Role } from "@ronde/core/message"
 import { ok } from "@ronde/core/result"
 import { tool } from "@ronde/core/toolkit"
@@ -269,7 +269,7 @@ describe("@ronde/engine commit boundaries", () => {
         if (call === 0) {
           return contextLengthExceeded()
         }
-        if (request.mode === CompletionMode.Compaction) {
+        if (request.system === "compact") {
           return textResponse("summary")
         }
         return textResponse("done")
@@ -290,7 +290,6 @@ describe("@ronde/engine commit boundaries", () => {
               system: "compact",
               messages: ctx.history,
               tools: [],
-              mode: CompletionMode.Compaction,
               effort: ctx.effort,
               maxOutput: ctx.maxOutput,
               signal: ctx.signal,
@@ -329,7 +328,7 @@ describe("@ronde/engine commit boundaries", () => {
           if (call === 0) {
             return toolResponse("echo", { text: "a" })
           }
-          if (request.mode === CompletionMode.Compaction) {
+          if (request.system === "compact") {
             return textResponse("summary")
           }
           return textResponse("done")
@@ -352,7 +351,6 @@ describe("@ronde/engine commit boundaries", () => {
               system: "compact",
               messages: ctx.history,
               tools: [],
-              mode: CompletionMode.Compaction,
               effort: ctx.effort,
               maxOutput: ctx.maxOutput,
               signal: ctx.signal,

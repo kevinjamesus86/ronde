@@ -2,9 +2,6 @@ import Anthropic from "@anthropic-ai/sdk"
 import {
   coalesceByRole,
   canonicalize,
-  normalizeCompletionMode,
-  modeWantsThoughtText,
-  modeWantsThoughtReplay,
   wrapSdkError,
   type NormalizedPart,
 } from "@ronde/backend"
@@ -16,7 +13,6 @@ import type {
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages/messages.js"
 import {
-  CompletionMode,
   Effort,
   StopReason,
   type CompletionBackend,
@@ -137,7 +133,6 @@ function serializeTools(tools: ToolSchema[]): Record<string, unknown>[] {
 
 function parseContentBlocks(
   blocks: ContentBlock[],
-  mode: Lax<CompletionMode>,
   responseId?: string,
 ): Message[] {
   const parts: MessagePart[] = []
@@ -151,11 +146,8 @@ function parseContentBlocks(
       continue
     }
     if (block.type === "thinking") {
-      if (!modeWantsThoughtReplay(mode) && !modeWantsThoughtText(mode)) {
-        continue
-      }
       const tb = block as ThinkingBlock
-      const content = modeWantsThoughtText(mode) ? tb.thinking || "" : ""
+      const content = tb.thinking || ""
       const meta = anthropicMeta(tb.signature || undefined)
       if (!content && !meta) {
         continue
@@ -234,10 +226,7 @@ function normalizeAnthropicEffort(
   }
 }
 
-function buildPayload(
-  request: CompletionRequest,
-  mode: Lax<CompletionMode>,
-): Record<string, unknown> {
+function buildPayload(request: CompletionRequest): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     model: request.model,
     max_tokens: request.maxOutput,
@@ -255,23 +244,17 @@ function buildPayload(
   if (effort && anthropicModelSupportsEffort(request.model)) {
     payload.output_config = { effort }
   }
-  if (
-    modeWantsThoughtReplay(mode) &&
-    anthropicModelSupportsAdaptiveThinking(request.model)
-  ) {
+  if (anthropicModelSupportsAdaptiveThinking(request.model)) {
     payload.thinking = { type: "adaptive" }
   }
 
   return payload
 }
 
-function buildResponse(
-  data: AnthropicMessage,
-  mode: Lax<CompletionMode>,
-): CompletionResponse {
+function buildResponse(data: AnthropicMessage): CompletionResponse {
   const usage = data.usage
   return {
-    messages: parseContentBlocks(data.content, mode, data.id),
+    messages: parseContentBlocks(data.content, data.id),
     stopReason: normalizeStopReason(data.stop_reason),
     usage: {
       inputTokens: usage.input_tokens,
@@ -313,8 +296,7 @@ export class AnthropicCompletionBackend implements CompletionBackend {
   async *complete(
     request: CompletionRequest,
   ): AsyncGenerator<CompletionDelta, CompletionResponse, void> {
-    const mode = normalizeCompletionMode(request.mode)
-    const payload = buildPayload(request, mode)
+    const payload = buildPayload(request)
 
     let data: AnthropicMessage
     try {
@@ -365,6 +347,6 @@ export class AnthropicCompletionBackend implements CompletionBackend {
       throw wrapSdkError(err)
     }
 
-    return buildResponse(data, mode)
+    return buildResponse(data)
   }
 }

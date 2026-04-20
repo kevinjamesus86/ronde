@@ -5,14 +5,6 @@
 import type { Lax } from "./tool.js"
 import type { Message } from "./message.js"
 
-/** Completion mode — controls thinking behavior. */
-export const enum CompletionMode {
-  Agentic = "agentic",
-  Structured = "structured",
-  /** Compaction mode — no thinking replay. */
-  Compaction = "compaction",
-}
-
 /** Why the model stopped generating. */
 export const enum StopReason {
   EndTurn = "end_turn",
@@ -81,7 +73,6 @@ export interface CompletionRequest {
   system?: string
   messages: Message[]
   tools: ToolSchema[]
-  mode: Lax<CompletionMode>
   effort?: Lax<Effort>
   maxOutput: number
   providerOptions?: Record<string, unknown>

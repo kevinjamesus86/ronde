@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
   CompletionError,
   CompletionErrorKind,
-  CompletionMode,
   emptyUsage,
   StopReason,
 } from "@ronde/core/completion"
@@ -25,8 +24,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
     })
 
     const request = backend.requests[0]!
-    // Agentic mode lets the model think while distilling.
-    expect(request.mode).toBe(CompletionMode.Agentic)
     // Compaction system prompt drives the summary.
     expect(request.system).toContain("continuation context")
     // No system-prompt-prepended user message — history flows through

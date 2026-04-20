@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import {
-  CompletionMode,
   MessageType,
   Role,
   StopReason,
@@ -125,7 +124,6 @@ describe("@ronde/ai-sdk request conversion", () => {
         system: "system prompt",
         messages: [userMessage("hi")],
         tools: [],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -167,7 +165,6 @@ describe("@ronde/ai-sdk request conversion", () => {
           userMessage("follow up"),
         ],
         tools: [],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -182,7 +179,7 @@ describe("@ronde/ai-sdk request conversion", () => {
     })
   })
 
-  it("replays thinking parts only when the mode policy allows it", async () => {
+  it("serializes thinking parts in history into reasoning blocks on the prompt", async () => {
     const calls: any[] = []
     const backend = fromAiSdk(
       mockAiSdkModel((options) => {
@@ -209,18 +206,6 @@ describe("@ronde/ai-sdk request conversion", () => {
         model: "test",
         messages: [assistantWithThinking],
         tools: [],
-        mode: CompletionMode.Agentic,
-        effort: undefined,
-        maxOutput: 100,
-      } as any),
-    )
-
-    await drain(
-      backend.complete({
-        model: "test",
-        messages: [assistantWithThinking],
-        tools: [],
-        mode: CompletionMode.Compaction,
         effort: undefined,
         maxOutput: 100,
       } as any),
@@ -230,11 +215,6 @@ describe("@ronde/ai-sdk request conversion", () => {
       type: "reasoning",
       text: "reasoning",
     })
-    expect(
-      calls[1]!.prompt[0].content.some(
-        (part: any) => part.type === "reasoning",
-      ),
-    ).toBe(false)
   })
 
   it("converts tool schemas into AI SDK function tools", async () => {
@@ -265,7 +245,6 @@ describe("@ronde/ai-sdk request conversion", () => {
             inputSchema: { type: "object" },
           },
         ],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -311,7 +290,6 @@ describe("@ronde/ai-sdk request conversion", () => {
             strict: true,
           },
         ],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -357,7 +335,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -388,7 +365,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -415,7 +391,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -455,7 +430,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        mode: CompletionMode.Agentic,
         effort: undefined,
         maxOutput: 100,
       }),
@@ -532,7 +506,6 @@ describe("@ronde/ai-sdk adapter", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        mode: CompletionMode.Structured,
         effort: undefined,
         maxOutput: 100,
         providerOptions: {
@@ -592,7 +565,6 @@ describe("@ronde/ai-sdk adapter", () => {
       model: "test",
       messages: [userMessage("go")],
       tools: [],
-      mode: CompletionMode.Agentic,
       effort: undefined,
       maxOutput: 100,
     }) as AsyncGenerator<any, any, void>

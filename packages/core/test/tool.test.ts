@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { CompletionMode } from "@ronde/core/completion"
+import { Effort } from "@ronde/core/completion"
 import type { Awaitable, Lax } from "@ronde/core"
 import type { ToolCall, ToolResult } from "@ronde/core/tool"
 
@@ -30,11 +30,11 @@ describe("@ronde/core tool value contracts", () => {
 
 describe("@ronde/core tool type aliases", () => {
   it("covers Lax accepting enum values and underlying string literals in type tests", () => {
-    const enumValue: Lax<CompletionMode> = CompletionMode.Agentic
-    const stringValue: Lax<CompletionMode> = "structured"
+    const enumValue: Lax<Effort> = Effort.High
+    const stringValue: Lax<Effort> = "low"
 
-    expect(enumValue).toBe(CompletionMode.Agentic)
-    expect(stringValue).toBe("structured")
+    expect(enumValue).toBe(Effort.High)
+    expect(stringValue).toBe("low")
   })
 
   it("covers Awaitable accepting plain values and PromiseLike values in type tests", async () => {

@@ -1,7 +1,6 @@
 import {
   CompletionError,
   CompletionErrorKind,
-  CompletionMode,
   emptyUsage,
 } from "@ronde/core/completion"
 import {
@@ -81,7 +80,6 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
             // model can reason through distillation. Historical thinking
             // is stripped above; we only extract text parts from the
             // response, so any thinking output is discarded too.
-            mode: CompletionMode.Agentic,
             effort,
             maxOutput: ctx.maxOutput,
             signal: ctx.signal,

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
   CompletionError,
   CompletionErrorKind,
-  CompletionMode,
   EMPTY_USAGE,
   Effort,
   StopReason,
@@ -96,7 +95,6 @@ describe("@ronde/core configured backend contract", () => {
       model: "test-model",
       messages: [],
       tools: [],
-      mode: CompletionMode.Agentic,
       effort: Effort.Low,
       maxOutput: 512,
     })

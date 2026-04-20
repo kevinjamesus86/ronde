@@ -7,7 +7,6 @@ import type {
   Part,
 } from "@google/genai"
 import {
-  CompletionMode,
   Effort,
   StopReason,
   emptyUsage,
@@ -33,9 +32,6 @@ import type { InternalBackendConfig } from "./types.js"
 import {
   coalesceByRole,
   canonicalize,
-  normalizeCompletionMode,
-  modeWantsThoughtText,
-  modeWantsThoughtReplay,
   wrapSdkError,
   type NormalizedPart,
 } from "@ronde/backend"
@@ -192,7 +188,6 @@ function serializeTools(
 
 function parseParts(
   geminiParts: Part[] | undefined,
-  mode: Lax<CompletionMode>,
   responseId?: string,
 ): Message[] {
   const parts: MessagePart[] = []
@@ -211,10 +206,9 @@ function parseParts(
           toolCallId: gp.functionCall.id || `gemini-call-${toolCallIndex}`,
           name: gp.functionCall.name,
           arguments: gp.functionCall.args || {},
-          meta:
-            modeWantsThoughtReplay(mode) && lastThoughtSignature
-              ? geminiMeta(lastThoughtSignature)
-              : undefined,
+          meta: lastThoughtSignature
+            ? geminiMeta(lastThoughtSignature)
+            : undefined,
         }),
       )
       continue
@@ -222,23 +216,15 @@ function parseParts(
 
     if (gp.text?.trim()) {
       if (gp.thought === true) {
-        if (!modeWantsThoughtReplay(mode) && !modeWantsThoughtText(mode)) {
-          continue
-        }
-        const content = modeWantsThoughtText(mode) ? gp.text : ""
+        const content = gp.text
         const meta = geminiMeta(gp.thoughtSignature || undefined)
-        if (!content && !meta) {
-          continue
-        }
         parts.push(thinkingPart(content, meta))
       } else {
         parts.push(
           textPart(
             Role.Assistant,
             gp.text,
-            modeWantsThoughtReplay(mode) && lastThoughtSignature
-              ? geminiMeta(lastThoughtSignature)
-              : undefined,
+            lastThoughtSignature ? geminiMeta(lastThoughtSignature) : undefined,
           ),
         )
       }
@@ -365,7 +351,6 @@ export class GeminiCompletionBackend implements CompletionBackend {
   async *complete(
     request: CompletionRequest,
   ): AsyncGenerator<CompletionDelta, CompletionResponse, void> {
-    const mode = normalizeCompletionMode(request.mode)
     const config: Record<string, unknown> = {
       maxOutputTokens: request.maxOutput,
     }
@@ -377,12 +362,12 @@ export class GeminiCompletionBackend implements CompletionBackend {
     if (isGemini3Model(request.model)) {
       config.thinkingConfig = {
         thinkingLevel: normalizeGemini3Effort(request.model, request.effort),
-        ...(modeWantsThoughtReplay(mode) ? { includeThoughts: true } : {}),
+        includeThoughts: true,
       }
     } else if (isGemini25Model(request.model)) {
       config.thinkingConfig = {
         thinkingBudget: normalizeGemini25Effort(request.effort),
-        ...(modeWantsThoughtReplay(mode) ? { includeThoughts: true } : {}),
+        includeThoughts: true,
       }
     }
 
@@ -435,7 +420,6 @@ export class GeminiCompletionBackend implements CompletionBackend {
     const candidate: Candidate | null = lastChunk?.candidates?.[0] ?? null
     const messages = parseParts(
       accumulatedParts,
-      mode,
       lastChunk?.responseId ?? undefined,
     )
     const allParts = messages.flatMap((m) => m.parts)

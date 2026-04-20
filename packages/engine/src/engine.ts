@@ -1,7 +1,6 @@
 import {
   CompletionError,
   CompletionErrorKind,
-  CompletionMode,
   StopReason,
   emptyUsage,
   type CompletionDelta,
@@ -498,7 +497,6 @@ export async function* engine<W extends Workspace = Workspace>(
               system,
               messages: turnConfig.messages,
               tools: turnConfig.toolSchemas,
-              mode: CompletionMode.Agentic,
               effort: turnConfig.effort,
               maxOutput: runtime.maxOutput,
               signal: abortSignal,

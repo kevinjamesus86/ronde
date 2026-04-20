@@ -30,7 +30,6 @@ import type {
   SharedV3Warning,
 } from "@ai-sdk/provider"
 import {
-  CompletionMode,
   StopReason,
   emptyUsage,
   type CompletionBackend,
@@ -42,7 +41,6 @@ import {
   type ToolSchema,
   type UsageStats,
 } from "@ronde/core/completion"
-import type { Lax } from "@ronde/core"
 import {
   MessageType,
   Role,
@@ -56,8 +54,6 @@ import {
 import {
   DEFAULT_MAX_CONTEXT,
   DEFAULT_MAX_OUTPUT,
-  modeWantsThoughtText,
-  modeWantsThoughtReplay,
   canonicalize,
 } from "@ronde/backend"
 
@@ -82,10 +78,7 @@ type AiSdkAssistantPart = Extract<
 // Request conversion: ronde → AI SDK
 // -------------------------------------------------------
 
-function convertMessages(
-  messages: Message[],
-  mode: Lax<CompletionMode>,
-): AiSdkMessage[] {
+function convertMessages(messages: Message[]): AiSdkMessage[] {
   const out: AiSdkMessage[] = []
 
   // AI SDK expects role at message level; canonical messages carry role on
@@ -164,7 +157,7 @@ function convertMessages(
           slot.texts.push(part.content)
         }
       } else if (part.type === MessageType.Think) {
-        if (!modeWantsThoughtReplay(mode) || !part.content.trim()) {
+        if (!part.content.trim()) {
           continue
         }
         const slot = ensure("assistant")
@@ -215,19 +208,14 @@ function convertTools(tools: ToolSchema[]): AiSdkFunctionTool[] {
 // Response conversion: AI SDK → ronde
 // -------------------------------------------------------
 
-function convertContent(
-  content: AiSdkContent[],
-  mode: Lax<CompletionMode>,
-): Message[] {
+function convertContent(content: AiSdkContent[]): Message[] {
   const parts: MessagePart[] = []
 
   for (const c of content) {
     if (c.type === "text" && c.text?.trim()) {
       parts.push(textPart(Role.Assistant, c.text))
     } else if (c.type === "reasoning" && c.text) {
-      if (modeWantsThoughtText(mode) || modeWantsThoughtReplay(mode)) {
-        parts.push(thinkingPart(modeWantsThoughtText(mode) ? c.text : ""))
-      }
+      parts.push(thinkingPart(c.text))
     } else if (c.type === "tool-call" && c.toolCallId && c.toolName) {
       let args: Record<string, unknown> = {}
       if (typeof c.input === "string") {
@@ -304,12 +292,11 @@ async function* completeStream(
   model: AiSdkLanguageModel,
   request: CompletionRequest,
 ): AsyncGenerator<CompletionDelta, CompletionResponse, void> {
-  const mode = request.mode as CompletionMode
   const canonical = canonicalize(
     request.messages,
     (_meta: unknown): _meta is never => false,
   )
-  const prompt = convertMessages(canonical, mode)
+  const prompt = convertMessages(canonical)
 
   if (request.system?.trim()) {
     prompt.unshift({ role: "system", content: request.system })
@@ -419,7 +406,7 @@ async function* completeStream(
   }
 
   return {
-    messages: convertContent(content, mode),
+    messages: convertContent(content),
     stopReason: finishReason
       ? convertFinishReason(finishReason)
       : StopReason.Unknown,

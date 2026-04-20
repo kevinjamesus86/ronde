@@ -31,14 +31,7 @@ import {
   type MessagePart,
 } from "@ronde/core/message"
 import type { InternalBackendConfig } from "./types.js"
-import {
-  canonicalize,
-  normalizeCompletionMode,
-  modeWantsThoughtText,
-  modeWantsThoughtReplay,
-  wrapSdkError,
-  type NormalizedPart,
-} from "@ronde/backend"
+import { canonicalize, wrapSdkError, type NormalizedPart } from "@ronde/backend"
 import type { ProviderDescriptor } from "./registry.js"
 
 // `self` is defined in every browser-like runtime (Window, Web/Service/Shared
@@ -389,7 +382,6 @@ export class OpenAICompletionBackend implements CompletionBackend {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
-    const mode = normalizeCompletionMode(request.mode)
     const payload: Record<string, unknown> = {
       model: request.model,
       instructions: request.system,
@@ -400,18 +392,10 @@ export class OpenAICompletionBackend implements CompletionBackend {
 
     const effort = normalizeOpenAIEffort(request.effort)
     if (isNativeOpenAI(this.resolved)) {
-      if (effort || modeWantsThoughtText(mode)) {
-        payload.reasoning = {} as Record<string, unknown>
-      }
+      payload.reasoning = { summary: "auto" } as Record<string, unknown>
       if (effort) {
         ;(payload.reasoning as Record<string, unknown>).effort = effort
       }
-      if (modeWantsThoughtText(mode)) {
-        ;(payload.reasoning as Record<string, unknown>).summary = "auto"
-      }
-    }
-
-    if (isNativeOpenAI(this.resolved) && modeWantsThoughtReplay(mode)) {
       payload.include = ["reasoning.encrypted_content"]
     }
 

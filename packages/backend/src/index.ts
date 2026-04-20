@@ -1,10 +1,5 @@
 export { classifyError, wrapSdkError } from "./errors.js"
 export {
-  normalizeCompletionMode,
-  modeWantsThoughtReplay,
-  modeWantsThoughtText,
-} from "./mode.js"
-export {
   canonicalize,
   coalesceByRole,
   type NormalizedMessage,

@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   CompletionError,
   CompletionErrorKind,
-  CompletionMode,
   StopReason,
   emptyUsage,
   type CompletionRequest,
@@ -22,7 +21,6 @@ function request(signal?: AbortSignal): CompletionRequest {
     model: "test-model",
     messages: [userMessage("hello")],
     tools: [],
-    mode: CompletionMode.Agentic,
     effort: undefined,
     maxOutput: 1024,
     signal,

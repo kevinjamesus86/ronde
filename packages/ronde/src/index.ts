@@ -46,7 +46,6 @@ export { ok, err, isOk, type Result } from "@ronde/core/result"
 export {
   Role,
   MessageType,
-  CompletionMode,
   StopReason,
   Effort,
   userMessage,

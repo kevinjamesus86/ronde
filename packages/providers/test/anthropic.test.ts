@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   CompletionErrorKind,
-  CompletionMode,
   StopReason,
   type CompletionRequest,
 } from "@ronde/core/completion"
@@ -41,7 +40,6 @@ const baseRequest: CompletionRequest = {
   system: "be helpful",
   messages: [],
   tools: [],
-  mode: CompletionMode.Agentic,
   effort: undefined,
   maxOutput: 256,
 }
