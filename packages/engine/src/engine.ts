@@ -172,6 +172,7 @@ export async function* engine<W extends Workspace = Workspace>(
     signal,
     hooks,
     compaction,
+    truncation,
   } = config
 
   const { model, effort, maxContext, maxOutput } = backend.config
@@ -594,6 +595,7 @@ export async function* engine<W extends Workspace = Workspace>(
           approvals,
           workspace,
           journal,
+          truncation?.maxInline,
         )
 
         // Pairs were already journaled inside executeToolCalls; this

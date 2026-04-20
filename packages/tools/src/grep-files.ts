@@ -1,16 +1,13 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod/v4"
-import type { ToolContext } from "@ronde/core/toolkit"
 import { ok, err } from "@ronde/core/result"
 import { walk } from "./walk.js"
 import type { PathContext } from "./context.js"
 import { pathContextForWorkspace } from "./workspace-path.js"
 import type { GrepData, GrepMatch } from "./types.js"
-import type { DirectoryWorkspace } from "@ronde/core/workspace"
 import { fsTool } from "./fs-tool.js"
 
-const MAX_INLINE = 200
 const HARD_LIMIT = 10_000
 const MAX_FILE_SIZE = 1024 * 1024
 
@@ -31,9 +28,8 @@ const parameters = z.object({
 
 /**
  * Search file contents with a JS regex. Skips binary files and files
- * larger than {@link MAX_FILE_SIZE}. Up to {@link MAX_INLINE} matches
- * return inline; on overflow the full `file:line: text` list spills to
- * the workspace and the model drills in via `read_file`. Respects
+ * larger than {@link MAX_FILE_SIZE}. Matches are collected up to
+ * {@link HARD_LIMIT} and returned grouped by file. Respects
  * `.gitignore` by default.
  */
 export const grepFiles = (pathCtx: PathContext, opts: GrepOptions = {}) =>
@@ -41,20 +37,14 @@ export const grepFiles = (pathCtx: PathContext, opts: GrepOptions = {}) =>
     name: "grep_files",
     description:
       "Search file contents using a regex. Returns matching lines" +
-      ` grouped by file. First ${MAX_INLINE} matches shown inline;` +
-      " on overflow the full list is spilled — drill in with read_file.",
+      " grouped by file.",
     parameters,
     execute: (args, ctx) =>
-      grep(pathContextForWorkspace(pathCtx, ctx.workspace), opts, args, ctx),
+      grep(pathContextForWorkspace(pathCtx, ctx.workspace), opts, args),
     format,
   })
 
-async function grep(
-  pathCtx: PathContext,
-  opts: GrepOptions,
-  args: GrepArgs,
-  ctx: ToolContext<DirectoryWorkspace>,
-) {
+async function grep(pathCtx: PathContext, opts: GrepOptions, args: GrepArgs) {
   const check = pathCtx.safeDirectoryPath(args.path, "path")
   if (!check.ok) {
     return err(check.error)
@@ -104,25 +94,10 @@ async function grep(
     } catch {}
   }
 
-  const totalMatches = allMatches.length
-  const truncated = totalMatches > MAX_INLINE
-  const inline = truncated ? allMatches.slice(0, MAX_INLINE) : allMatches
-
-  let fullMatchesPath: string | undefined
-  if (truncated) {
-    const body = allMatches
-      .map((m) => `${m.file}:${m.line}: ${m.text}`)
-      .join("\n")
-    const spill = await ctx.spill(body)
-    fullMatchesPath = spill.path
-  }
-
   return ok<GrepData>({
-    matches: inline,
+    matches: allMatches,
     fileCount: matchedFiles.size,
-    totalMatches,
-    truncated,
-    ...(fullMatchesPath ? { fullMatchesPath } : {}),
+    totalMatches: allMatches.length,
   })
 }
 
@@ -143,16 +118,5 @@ function format(data: GrepData): string {
   for (const [file, lines] of byFile) {
     sections.push(`## ${file}\n${lines.join("\n")}`)
   }
-  let out = sections.join("\n\n")
-  if (data.truncated) {
-    out +=
-      `\n\n[${data.totalMatches} total matches` +
-      ` — showing first ${MAX_INLINE}.` +
-      (data.fullMatchesPath
-        ? ` Full list at ${data.fullMatchesPath}.` +
-          ` Use read_file with offset/limit to see more.`
-        : "") +
-      `]`
-  }
-  return out
+  return sections.join("\n\n")
 }

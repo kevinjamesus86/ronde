@@ -8,7 +8,7 @@ const tmp = useTmp()
 afterEach(() => tmp.cleanup())
 
 describe("@ronde/tools shell output shaping", () => {
-  it("spills large stdout and returns the full output path", async () => {
+  it("returns stdout verbatim", async () => {
     const root = tmp.dir()
     const toolkit = shell(new PathContext([root]), {
       cwd: root,
@@ -26,13 +26,12 @@ describe("@ronde/tools shell output shaping", () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.data.truncated).toBe(true)
-      expect(result.data.fullStdoutPath).toBeDefined()
-      expect(result.data.totalBytes).toBeGreaterThanOrEqual(40000)
+      // Tool returns raw stdout; framework cuts at formatToolOutput layer.
+      expect(result.data.stdout.length).toBeGreaterThanOrEqual(40000)
     }
   })
 
-  it("leaves small stdout untruncated", async () => {
+  it("captures short stdout", async () => {
     const root = tmp.dir()
     const toolkit = shell(new PathContext([root]), {
       cwd: root,
@@ -50,13 +49,20 @@ describe("@ronde/tools shell output shaping", () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.data.truncated).toBe(false)
-      expect(result.data.fullStdoutPath).toBeUndefined()
-      expect(result.data.totalBytes).toBe(5)
+      expect(result.data.stdout).toBe("short")
     }
   })
 
-  it("formats successful output directly", () => {
+  it("declares the middle truncate strategy", () => {
+    const toolkit = shell(new PathContext([tmp.dir()]), {
+      sandbox: false,
+      snapshot: false,
+    })
+
+    expect(toolkit.truncate).toEqual({ shell: "middle" })
+  })
+
+  it("formats successful output as stdout", () => {
     const toolkit = shell(new PathContext([tmp.dir()]), {
       sandbox: false,
       snapshot: false,
@@ -67,29 +73,8 @@ describe("@ronde/tools shell output shaping", () => {
         exitCode: 0,
         stdout: "hello",
         stderr: "",
-        truncated: false,
-        totalBytes: 5,
       }),
     ).toBe("hello")
-  })
-
-  it("formats truncated output with a read_file spill hint", () => {
-    const toolkit = shell(new PathContext([tmp.dir()]), {
-      sandbox: false,
-      snapshot: false,
-    })
-
-    const formatted = toolkit.formatters.shell?.({
-      exitCode: 0,
-      stdout: "head...\n\n[... truncated ...]\n\n...tail",
-      stderr: "",
-      truncated: true,
-      totalBytes: 50000,
-      fullStdoutPath: "/tmp/spill/shell-x.txt",
-    })
-
-    expect(formatted).toContain("Full output at /tmp/spill/shell-x.txt")
-    expect(formatted).toContain("read_file")
   })
 
   it("formats stderr and exit code on failures", () => {
@@ -102,8 +87,6 @@ describe("@ronde/tools shell output shaping", () => {
       exitCode: 2,
       stdout: "head",
       stderr: "warning!",
-      truncated: false,
-      totalBytes: 4,
     })
 
     expect(formatted).toContain("STDERR:")

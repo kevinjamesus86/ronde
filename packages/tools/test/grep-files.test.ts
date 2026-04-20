@@ -46,7 +46,6 @@ describe("@ronde/tools grep_files", () => {
         matches: [{ file: "a.txt", line: 2, text: "ronde" }],
         fileCount: 1,
         totalMatches: 1,
-        truncated: false,
       },
     })
   })

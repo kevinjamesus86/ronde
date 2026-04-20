@@ -7,7 +7,7 @@ const tmp = useTmp()
 
 afterEach(() => tmp.cleanup())
 
-describe("@ronde/tools grep_files overflow and formatting", () => {
+describe("@ronde/tools grep_files", () => {
   it("rejects empty-matching patterns", async () => {
     const root = tmp.dir()
     const toolkit = grepFiles(new PathContext([root]))
@@ -23,7 +23,7 @@ describe("@ronde/tools grep_files overflow and formatting", () => {
     expect(result.ok).toBe(false)
   })
 
-  it("spills the full match list when inline matches overflow", async () => {
+  it("returns every match up to the hard limit", async () => {
     const root = tmp.dir()
     tmp.write(root, {
       "big.txt": Array.from({ length: 250 }, (_, i) => `hello ${i + 1}`).join(
@@ -43,13 +43,11 @@ describe("@ronde/tools grep_files overflow and formatting", () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.data.totalMatches).toBe(250)
-      expect(result.data.matches).toHaveLength(200)
-      expect(result.data.truncated).toBe(true)
-      expect(result.data.fullMatchesPath).toBeDefined()
+      expect(result.data.matches).toHaveLength(250)
     }
   })
 
-  it("does not spill when matches fit inline", async () => {
+  it("returns each match with file, line number, and text", async () => {
     const root = tmp.dir()
     tmp.write(root, { "small.txt": "hello\nworld\nhello\n" })
     const toolkit = grepFiles(new PathContext([root]))
@@ -64,12 +62,12 @@ describe("@ronde/tools grep_files overflow and formatting", () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.data.truncated).toBe(false)
-      expect(result.data.fullMatchesPath).toBeUndefined()
+      expect(result.data.matches).toHaveLength(2)
+      expect(result.data.totalMatches).toBe(2)
     }
   })
 
-  it("formats grouped matches by file", () => {
+  it("formats matches grouped by file", () => {
     const toolkit = grepFiles(new PathContext([tmp.dir()]))
 
     const formatted = toolkit.formatters.grep_files?.({
@@ -80,26 +78,12 @@ describe("@ronde/tools grep_files overflow and formatting", () => {
       ],
       fileCount: 2,
       totalMatches: 3,
-      truncated: false,
     })
 
     expect(formatted).toContain("## a.txt")
     expect(formatted).toContain("## b.txt")
-  })
-
-  it("formats truncated results with a spill hint", () => {
-    const toolkit = grepFiles(new PathContext([tmp.dir()]))
-
-    const formatted = toolkit.formatters.grep_files?.({
-      matches: [{ file: "a.txt", line: 1, text: "hit" }],
-      fileCount: 1,
-      totalMatches: 500,
-      truncated: true,
-      fullMatchesPath: "/tmp/matches.txt",
-    })
-
-    expect(formatted).toContain("500 total matches")
-    expect(formatted).toContain("Full list at /tmp/matches.txt")
-    expect(formatted).toContain("read_file")
+    // No tool-level hint; framework appends its neutral hint when it cuts.
+    expect(formatted).not.toContain("read_file")
+    expect(formatted).not.toContain("Full list at")
   })
 })

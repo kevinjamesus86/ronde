@@ -33,15 +33,10 @@ export interface GrepMatch {
 }
 
 export interface GrepData {
-  /** Inline preview — first N matches. */
   matches: GrepMatch[]
   fileCount: number
   /** Total matches found, capped at a hard search limit. */
   totalMatches: number
-  /** True when more matches exist than the inline preview contains. */
-  truncated: boolean
-  /** Full match list (`file:line: text` lines) spilled to the workspace. */
-  fullMatchesPath?: string
 }
 
 export interface ListDirectoryEntry {
@@ -58,13 +53,6 @@ export interface ListDirectoryData {
 
 export interface ShellData {
   exitCode: number
-  /** Middle-truncated (head+tail) when the full output exceeds the inline cap. */
   stdout: string
   stderr: string
-  /** True when `stdout` is a preview and full output was spilled. */
-  truncated: boolean
-  /** Full output spilled to the workspace when `truncated` is true. */
-  fullStdoutPath?: string
-  /** Total bytes produced by the command, including any spilled output. */
-  totalBytes: number
 }

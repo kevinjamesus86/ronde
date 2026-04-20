@@ -103,6 +103,46 @@ describe("@ronde/engine executeToolCalls", () => {
     })
   })
 
+  it("applies the configured maxInline to framework truncation", async () => {
+    const toolkit = tool<TestWorkspace>()({
+      name: "big",
+      description: "Big",
+      parameters: z.object({}),
+      execute: async () => ok("x".repeat(200)),
+      format: (data) => data as string,
+      truncate: "head",
+    })
+
+    const workspace = new TestWorkspace()
+    const result = await drainTool(
+      executeToolCalls(
+        [toolCallPart({ toolCallId: "call-1", name: "big", arguments: {} })],
+        toolkit,
+        {
+          turn: 1,
+          reasoning: [],
+          toolCalls: [],
+          usage: emptyUsage(),
+          stopReason: StopReason.Unknown,
+        },
+        1,
+        new AbortController().signal,
+        [],
+        new Map(),
+        workspace,
+        new TestJournal(),
+        50,
+      ),
+    )
+
+    const content = (result.resultParts[0] as { content: string }).content
+    // Head slice of 50 "x"s, marker, hint — total well under 200.
+    expect(content.startsWith("x".repeat(50))).toBe(true)
+    expect(content).toContain("150 characters truncated")
+    expect(content).toContain("[Full output at memory://spill/1")
+    expect(workspace.spills).toHaveLength(1)
+  })
+
   it("returns tool_result events in completion order", async () => {
     const toolkit = tool<TestWorkspace>()({
       name: "wait",

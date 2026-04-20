@@ -19,7 +19,7 @@ import {
 import { ok } from "@ronde/core/result"
 
 describe("@ronde/core formatToolOutput", () => {
-  it("preserves err data when a formatter is registered", () => {
+  it("preserves err data when a formatter is registered", async () => {
     const toolkit: Toolkit = {
       schemas: [],
       async execute() {
@@ -30,7 +30,7 @@ describe("@ronde/core formatToolOutput", () => {
       },
     }
 
-    const output = formatToolOutput(
+    const output = await formatToolOutput(
       toolkit,
       "shell",
       err("Command failed with exit code 1", {
@@ -43,7 +43,7 @@ describe("@ronde/core formatToolOutput", () => {
     )
   })
 
-  it("uses the registered formatter for successful tool output", () => {
+  it("uses the registered formatter for successful tool output", async () => {
     const toolkit = tool({
       name: "greet",
       description: "Greet",
@@ -52,12 +52,12 @@ describe("@ronde/core formatToolOutput", () => {
       format: (data) => `Hello, ${(data as { name: string }).name}!`,
     })
 
-    expect(formatToolOutput(toolkit, "greet", ok({ name: "world" }))).toBe(
-      "Hello, world!",
-    )
+    expect(
+      await formatToolOutput(toolkit, "greet", ok({ name: "world" })),
+    ).toBe("Hello, world!")
   })
 
-  it("falls back to defaultFormatter when no formatter is registered", () => {
+  it("falls back to defaultFormatter when no formatter is registered", async () => {
     const toolkit: Toolkit = {
       schemas: [],
       async execute() {
@@ -66,12 +66,12 @@ describe("@ronde/core formatToolOutput", () => {
       formatters: {},
     }
 
-    expect(formatToolOutput(toolkit, "echo", ok({ answer: 42 }))).toBe(
+    expect(await formatToolOutput(toolkit, "echo", ok({ answer: 42 }))).toBe(
       '{"answer":42}',
     )
   })
 
-  it("returns the plain error string when err output carries no data", () => {
+  it("returns the plain error string when err output carries no data", async () => {
     const toolkit = tool({
       name: "noop",
       description: "No-op",
@@ -80,7 +80,267 @@ describe("@ronde/core formatToolOutput", () => {
       format: () => "not used",
     })
 
-    expect(formatToolOutput(toolkit, "noop", err("boom"))).toBe("boom")
+    expect(await formatToolOutput(toolkit, "noop", err("boom"))).toBe("boom")
+  })
+})
+
+describe("@ronde/core formatToolOutput framework truncation", () => {
+  class RecordingWorkspace extends Workspace {
+    readonly id = "recording"
+    readonly kind = "recording"
+    spills: { content: string; opts: SpillOpts | undefined }[] = []
+    async spill(content: string, opts?: SpillOpts): Promise<SpillResult> {
+      this.spills.push({ content, opts })
+      return {
+        uri: `memory://spill/${this.spills.length}`,
+        bytes: content.length,
+      }
+    }
+  }
+
+  function makeToolkit(
+    name: string,
+    truncate?: "head" | "tail" | "middle",
+  ): Toolkit {
+    return {
+      schemas: [],
+      async execute() {
+        return ok(null)
+      },
+      formatters: {
+        [name]: (data) => (data as { text: string }).text,
+      },
+      ...(truncate ? { truncate: { [name]: truncate } } : {}),
+    }
+  }
+
+  it("no-ops when output fits the inline budget", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("echo")
+    const out = await formatToolOutput(
+      toolkit,
+      "echo",
+      ok({ text: "small payload" }),
+      { workspace, toolUseId: "call-1", maxInline: 100 },
+    )
+
+    expect(out).toBe("small payload")
+    expect(workspace.spills).toHaveLength(0)
+  })
+
+  it("spills and keeps the head slice on default (head) strategy", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("echo")
+    const big = "x".repeat(50) + "y".repeat(50)
+    const out = await formatToolOutput(toolkit, "echo", ok({ text: big }), {
+      workspace,
+      toolUseId: "call-1",
+      maxInline: 30,
+    })
+
+    expect(workspace.spills).toHaveLength(1)
+    expect(workspace.spills[0]!.content).toBe(big)
+    expect(workspace.spills[0]!.opts).toEqual({ name: "echo-call-1" })
+    // Head slice: first 30 chars, marker, hint — no tail of original.
+    expect(out.startsWith("x".repeat(30))).toBe(true)
+    expect(out).toContain("70 characters truncated")
+    expect(out).toContain("[Full output at memory://spill/1 (100 bytes).]")
+    expect(out).not.toContain("y".repeat(10))
+  })
+
+  it("keeps the tail slice on tail strategy", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("shell", "tail")
+    const big = "x".repeat(50) + "y".repeat(50)
+    const out = await formatToolOutput(toolkit, "shell", ok({ text: big }), {
+      workspace,
+      toolUseId: "call-2",
+      maxInline: 30,
+    })
+
+    expect(out).toContain("y".repeat(30))
+    expect(out).not.toContain("x".repeat(40))
+    expect(out).toContain("[Full output at memory://spill/1 (100 bytes).]")
+  })
+
+  it("keeps both ends on middle strategy", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("grep", "middle")
+    const big = "h".repeat(50) + "m".repeat(50) + "t".repeat(50)
+    const out = await formatToolOutput(toolkit, "grep", ok({ text: big }), {
+      workspace,
+      toolUseId: "call-3",
+      maxInline: 40,
+    })
+
+    // half = 20 chars from each end
+    expect(out.startsWith("h".repeat(20))).toBe(true)
+    expect(out).toContain("t".repeat(20))
+    expect(out).not.toContain("m".repeat(30))
+    expect(out).toContain("[Full output at memory://spill/1 (150 bytes).]")
+  })
+
+  it("omits tool-name references from the spill hint", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("shell")
+    const out = await formatToolOutput(
+      toolkit,
+      "shell",
+      ok({ text: "x".repeat(100) }),
+      { workspace, toolUseId: "call-4", maxInline: 20 },
+    )
+
+    // The framework hint does not suggest any particular tool.
+    expect(out).not.toContain("read_file")
+    expect(out).not.toContain("Use ")
+  })
+
+  it("snaps the head cut back to the nearest newline within the window", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("echo")
+    // Newline at index 10. Exact cut at size=15 lands inside 'm' block;
+    // snap walks back to the \n, yielding an 11-char head ending on \n.
+    const content = "h".repeat(10) + "\n" + "m".repeat(90)
+    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+      workspace,
+      toolUseId: "call-snap-head",
+      maxInline: 15,
+    })
+
+    // Slice = "h"*10 + "\n". Then "\n\n[" begins the marker.
+    expect(out.startsWith("h".repeat(10) + "\n\n\n[")).toBe(true)
+    expect(out).toContain("90 characters truncated")
+  })
+
+  it("snaps the tail cut forward to the nearest newline within the window", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("echo", "tail")
+    // Exact tail start at index 86 lands mid-'m'. Snap forward to the
+    // \n at index 90, giving a 10-char 't' slice after the cut.
+    const content = "m".repeat(90) + "\n" + "t".repeat(10)
+    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+      workspace,
+      toolUseId: "call-snap-tail",
+      maxInline: 15,
+    })
+
+    expect(
+      out.endsWith(
+        "\n\n" +
+          "t".repeat(10) +
+          "\n\n[Full output at memory://spill/1 (101 bytes).]",
+      ),
+    ).toBe(true)
+    expect(out).toContain("91 characters truncated")
+  })
+
+  it("snaps both cuts in the middle strategy when newlines sit within range", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("shell", "middle")
+    // half = 15. Head snap at \n index 10 → cut 11. Tail minCut = 77,
+    // next \n at 81 → cut 82. Slice: "h"*10 + "\n", marker, "t"*10.
+    const content =
+      "h".repeat(10) + "\n" + "m".repeat(70) + "\n" + "t".repeat(10)
+    const out = await formatToolOutput(
+      toolkit,
+      "shell",
+      ok({ text: content }),
+      { workspace, toolUseId: "call-snap-middle", maxInline: 30 },
+    )
+
+    expect(out.startsWith("h".repeat(10) + "\n\n\n[")).toBe(true)
+    expect(
+      out.endsWith(
+        "\n\n" +
+          "t".repeat(10) +
+          "\n\n[Full output at memory://spill/1 (92 bytes).]",
+      ),
+    ).toBe(true)
+    expect(out).toContain("71 characters truncated")
+  })
+
+  it("falls through to exact cut when no newline sits within the snap window", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("echo")
+    // Single long line, no newlines anywhere.
+    const content = "x".repeat(1000)
+    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+      workspace,
+      toolUseId: "call-no-snap",
+      maxInline: 100,
+    })
+
+    expect(out.startsWith("x".repeat(100))).toBe(true)
+    expect(out).toContain("900 characters truncated")
+  })
+
+  it("bounds the snap — a newline outside SNAP_WINDOW does not pull the cut", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit = makeToolkit("echo")
+    // 500 'x', a newline, then 500 more 'x'. SNAP_WINDOW is 200.
+    // With maxInline=100, the exact cut is at index 100. The newline
+    // at index 500 is far outside [100-200, 100], so no snap applies.
+    const content = "x".repeat(500) + "\n" + "x".repeat(500)
+    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+      workspace,
+      toolUseId: "call-bounded",
+      maxInline: 100,
+    })
+
+    expect(out.startsWith("x".repeat(100))).toBe(true)
+    expect(out).toContain("901 characters truncated")
+  })
+})
+
+describe("@ronde/core tool() truncate metadata", () => {
+  it("lands the declared truncate strategy on the toolkit", () => {
+    const toolkit = tool({
+      name: "shell",
+      description: "Run a shell command.",
+      parameters: z.object({ cmd: z.string() }),
+      execute: async () => ok("output"),
+      truncate: "middle",
+    })
+
+    expect(toolkit.truncate).toEqual({ shell: "middle" })
+  })
+
+  it("omits the tool from the truncate map when not declared", () => {
+    const toolkit = tool({
+      name: "echo",
+      description: "Echo.",
+      parameters: z.object({ text: z.string() }),
+      execute: async (args) => ok(args.text),
+    })
+
+    expect(toolkit.truncate).toEqual({})
+  })
+
+  it("merges truncate maps across toolkits; later wins on collision", () => {
+    const first = tool({
+      name: "a",
+      description: "A.",
+      parameters: z.object({}),
+      execute: async () => ok(null),
+      truncate: "head",
+    })
+    const second = tool({
+      name: "b",
+      description: "B.",
+      parameters: z.object({}),
+      execute: async () => ok(null),
+      truncate: "tail",
+    })
+    const third = tool({
+      name: "a",
+      description: "A'.",
+      parameters: z.object({}),
+      execute: async () => ok(null),
+      truncate: "middle",
+    })
+
+    const merged = merge(first, second, third)
+    expect(merged.truncate).toEqual({ a: "middle", b: "tail" })
   })
 })
 
@@ -200,31 +460,6 @@ describe("@ronde/core tool", () => {
 
     await toolkit.dispose?.()
     expect(disposeCount).toBe(1)
-  })
-
-  it("binds spill names to call identity in ToolContext.spill", async () => {
-    const workspace = new RecordingWorkspace()
-    const toolkit = tool<RecordingWorkspace>()({
-      name: "shell",
-      description: "Shell",
-      parameters: z.object({}),
-      execute: async (_args, ctx) => {
-        await ctx.spill("hello")
-        return ok(null)
-      },
-    })
-
-    await toolkit.execute(
-      "shell",
-      {},
-      stubCtx({
-        workspace,
-        call: { name: "shell", toolUseId: "call-1", arguments: {} },
-      }),
-    )
-
-    expect(workspace.spills).toHaveLength(1)
-    expect(workspace.spills[0]).toMatchObject({ name: "shell-call-1" })
   })
 
   it("returns err output on schema validation failure", async () => {
@@ -507,11 +742,6 @@ function stubCtx(
     messages: [],
     workspace,
     call,
-    spill: (content, opts) =>
-      workspace.spill(content, {
-        ...opts,
-        name: `${call.name}-${call.toolUseId}`,
-      }),
     ...overrides,
   }
 }

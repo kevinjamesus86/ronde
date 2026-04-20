@@ -284,8 +284,6 @@ export class TestWorkspace extends Workspace {
     this.spills.push({ content, opts })
     return {
       uri: `memory://spill/${this.spills.length}`,
-      preview: content,
-      truncated: false,
       bytes: Buffer.byteLength(content, "utf8"),
     }
   }

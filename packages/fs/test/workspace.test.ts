@@ -47,18 +47,13 @@ describe("@ronde/fs workspace spill", () => {
     expect(result.uri).toBe(`file://${result.path}`)
   })
 
-  it("builds previews and truncation metadata from spill content", async () => {
+  it("reports byte counts from spill content", async () => {
     const dir = tmp.dir()
     const workspace = new FsWorkspace("rt-1", dir)
     const content = "a".repeat(12)
 
-    const result = await workspace.spill(content, {
-      previewHead: 4,
-      previewTail: 3,
-    })
+    const result = await workspace.spill(content)
 
-    expect(result.preview).toContain("aaaa")
-    expect(result.truncated).toBe(true)
     expect(result.bytes).toBe(Buffer.byteLength(content, "utf8"))
   })
 })

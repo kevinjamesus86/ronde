@@ -164,11 +164,6 @@ function stubCtx(
     messages: [],
     workspace,
     call,
-    spill: (content, opts) =>
-      workspace.spill(content, {
-        ...opts,
-        name: `${call.name}-${call.toolUseId}`,
-      }),
     ...overrides,
   }
 }
@@ -179,8 +174,6 @@ class RecordingWorkspace extends Workspace {
   async spill(_content: string, _opts?: SpillOpts): Promise<SpillResult> {
     return {
       uri: "memory://spill/1",
-      preview: "",
-      truncated: false,
       bytes: 0,
     }
   }

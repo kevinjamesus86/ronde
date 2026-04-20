@@ -335,30 +335,37 @@ detail nothing outside `@ronde/fs` should care about.
 
 ### `Workspace`
 
-Owns tool artifact semantics:
+Owns artifact persistence:
 
-- spill large outputs
-- expose backend-specific capabilities where needed
+- `spill(content, opts?)` persists the content and returns `{ uri, bytes }`
+- expose backend-specific capabilities where needed (e.g. `dir` on
+  `DirectoryWorkspace`)
 
 Does not own:
 
 - conversation history
 - turn loop state
 - provider behavior
+- truncation, preview construction, or size policy — those are
+  framework concerns (see "Tool output pipeline" in architecture.md)
 
 ### `Toolkit`
 
 Owns tool surface and execution:
 
 - tool schemas
-- named tool execution
-- output formatting
+- named tool execution (`execute` returns domain-shaped data)
+- output formatting (`format` renders data to the model-facing string)
+- per-tool truncation strategy declaration (`truncate: "head" | "tail"
+| "middle"`)
 
 Does not own:
 
 - history durability
 - runtime creation
 - provider calls
+- size governance of rendered output — the framework cuts oversized
+  formatted strings, spills them, and appends a neutral hint
 
 ### `CompletionBackend`
 

@@ -6,7 +6,6 @@ import {
   DirectoryWorkspace,
   type PathSpillResult,
   sanitizeFilename,
-  makePreview,
   type SpillOpts,
 } from "@ronde/core/workspace"
 import { rebase } from "./internal.js"
@@ -44,14 +43,9 @@ export class FsWorkspace extends DirectoryWorkspace {
     const full = path.join(this.dir, TOOL_RESULTS_DIR, name)
     await fs.mkdir(path.dirname(full), { recursive: true })
     await fs.writeFile(full, content, "utf-8")
-
-    const head = o.previewHead ?? 2000
-    const tail = o.previewTail ?? 1000
     return {
       path: full,
       uri: pathToFileURL(full).href,
-      preview: makePreview(content, head, tail),
-      truncated: content.length > head + tail,
       bytes: Buffer.byteLength(content, "utf-8"),
     }
   }

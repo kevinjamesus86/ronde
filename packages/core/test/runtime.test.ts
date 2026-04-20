@@ -64,8 +64,6 @@ class TestWorkspace extends Workspace {
   async spill(_content: string, _opts?: SpillOpts): Promise<SpillResult> {
     return {
       uri: "memory://workspace/test",
-      preview: "",
-      truncated: false,
       bytes: 0,
     }
   }

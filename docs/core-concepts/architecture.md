@@ -80,7 +80,8 @@ packages/
     runtime.ts      toolkit.ts   tool.ts      result.ts
 
   engine/
-    engine.ts       types.ts     helpers.ts   compaction.ts
+    engine.ts       types.ts     compaction.ts
+    tool-exec.ts    replay.ts
 
   lock/
     index.js        index.d.ts   Cargo.toml   src/lib.rs
@@ -98,7 +99,7 @@ packages/
     factory.ts      registry.ts  openai.ts   anthropic.ts   ...
 
   backend/
-    retry.ts        errors.ts    mode.ts     shared.ts
+    retry.ts        errors.ts    shared.ts   defaults.ts
 
   ai-sdk/
     index.ts
@@ -360,6 +361,73 @@ need a second durable copy.
 
 The engine depends only on the `Journal` contract's per-event atomicity.
 How a concrete backend delivers that guarantee is its own concern.
+
+### Tool output pipeline
+
+Tool output flows through three responsibilities, each owned by a
+different layer:
+
+```text
+tool.execute(args, ctx)  →  domain data          (tool)
+tool.format(data)        →  rendered string      (tool)
+framework                →  size governance      (engine + workspace)
+```
+
+A tool's `execute` returns purely domain-shaped data. Its `format`
+renders that data to the string the model reads. Neither concerns
+itself with how big the string is. The framework layer caps inline
+size, spills the full text to the workspace, slices the rendered
+output per the tool's declared `truncate` strategy, and appends a
+neutral hint pointing at the spill URI.
+
+```text
+formatToolOutput(toolkit, name, output, { workspace, toolUseId, maxInline })
+    |
+    → formatter renders data → string
+    → if string <= maxInline  → pass through
+    → else:
+        workspace.spill(string) → { uri, bytes }
+        sliceByStrategy(string, maxInline, toolkit.truncate[name] ?? "head")
+        append "[Full output at <uri> (<bytes> bytes).]"
+```
+
+Tools declare their preferred cut at the definition site:
+
+```ts
+tool({
+  name: "shell",
+  execute: async (args, ctx) => ok<ShellData>({ exitCode, stdout, stderr }),
+  format: (data) => renderShell(data),
+  truncate: "middle", // keep both ends; drop the middle
+})
+```
+
+Three strategies are supported: `"head"` (default — keep the
+beginning), `"tail"` (keep the end), `"middle"` (keep both ends).
+The cut walks up to 200 chars in the chosen direction to snap to a
+newline boundary; pathological long lines fall through to an exact
+char-index cut.
+
+Callers can override the inline budget per run:
+
+```ts
+engine(backend, {
+  toolkit,
+  journal,
+  workspace,
+  truncation: { maxInline: 100_000 }, // default: 25_000
+})
+```
+
+The neutral hint deliberately never names a specific tool ("Use
+`read_file`..."). That coupling would bake the framework into one
+toolkit's idioms; the model figures out which of its tools can read
+the spill URI from its own toolkit schemas.
+
+Artifact-producing tools (rare edge cases — image generation, binary
+exports) that genuinely need to persist beyond their formatter
+output reach for `ctx.workspace.spill(content, { name })` directly.
+The common-case tool never touches the workspace.
 
 ### Engine events
 

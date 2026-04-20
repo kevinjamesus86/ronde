@@ -3,7 +3,6 @@ import {
   DirectoryWorkspace,
   Workspace,
   isDirectoryWorkspace,
-  makePreview,
   sanitizeFilename,
   type SpillOpts,
   type SpillResult,
@@ -16,8 +15,6 @@ describe("@ronde/core workspace contract", () => {
 
     await expect(workspace.spill("hello")).resolves.toEqual({
       uri: "memory://workspace/test",
-      preview: "hello",
-      truncated: false,
       bytes: 5,
     })
   })
@@ -54,22 +51,6 @@ describe("@ronde/core sanitizeFilename", () => {
   })
 })
 
-describe("@ronde/core makePreview", () => {
-  it("returns the content unchanged when it fits within head plus tail", () => {
-    expect(makePreview("hello", 4, 4)).toBe("hello")
-  })
-
-  it("builds a head / marker / tail preview when content exceeds the window", () => {
-    expect(makePreview("abcdefghij", 3, 2)).toBe(
-      "abc\n\n[... 5 characters truncated ...]\n\nij",
-    )
-  })
-
-  it("reports the omitted character count in the truncation marker", () => {
-    expect(makePreview("abcdefghij", 3, 2)).toContain("5 characters truncated")
-  })
-})
-
 class TestWorkspace extends Workspace {
   readonly id = "workspace-1"
   readonly kind = "test"
@@ -77,8 +58,6 @@ class TestWorkspace extends Workspace {
   async spill(content: string, _opts?: SpillOpts): Promise<SpillResult> {
     return {
       uri: "memory://workspace/test",
-      preview: content,
-      truncated: false,
       bytes: Buffer.byteLength(content, "utf8"),
     }
   }
@@ -93,8 +72,6 @@ class TestDirectoryWorkspace extends DirectoryWorkspace {
     return {
       uri: "file:///tmp/ronde/spill.txt",
       path: "/tmp/ronde/spill.txt",
-      preview: content,
-      truncated: false,
       bytes: Buffer.byteLength(content, "utf8"),
     }
   }

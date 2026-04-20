@@ -3,7 +3,6 @@ import os from "node:os"
 import path from "node:path"
 import {
   DirectoryWorkspace,
-  makePreview,
   sanitizeFilename,
   type Workspace,
   type PathSpillResult,
@@ -66,14 +65,9 @@ export class TestDirectoryWorkspace extends DirectoryWorkspace {
     fs.mkdirSync(path.dirname(full), { recursive: true })
     fs.writeFileSync(full, content, "utf8")
     this.spills.set(full, content)
-
-    const head = opts.previewHead ?? 2000
-    const tail = opts.previewTail ?? 1000
     return {
       path: full,
       uri: `file://${full}`,
-      preview: makePreview(content, head, tail),
-      truncated: content.length > head + tail,
       bytes: Buffer.byteLength(content, "utf8"),
     }
   }
@@ -98,10 +92,5 @@ export async function execTool(
     messages: [],
     workspace,
     call,
-    spill: (content, opts) =>
-      workspace.spill(content, {
-        name: `${name}-${call.toolUseId}`,
-        ...opts,
-      }),
   })
 }

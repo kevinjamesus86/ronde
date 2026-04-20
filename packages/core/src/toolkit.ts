@@ -22,7 +22,10 @@ import type { ToolSchema } from "./completion.js"
 import { err, type Result } from "./result.js"
 import { asGenerator } from "./stream.js"
 import type { ToolCall } from "./tool.js"
-import type { Workspace, SpillOpts } from "./workspace.js"
+import type { Workspace } from "./workspace.js"
+
+/** Default inline-output budget (characters) before the framework spills and truncates. */
+export const DEFAULT_MAX_INLINE = 25_000
 
 export type ToolOutput<D = unknown> = Result<D>
 
@@ -38,12 +41,6 @@ export interface ToolContext<W extends Workspace = Workspace> {
   messages: readonly Message[]
   workspace: W
   call: ToolCall
-  /**
-   * Spill large output to the workspace. Filename is pre-bound to
-   * `<call.name>-<call.toolUseId>` so it correlates to a journal
-   * event. For custom names, use `ctx.workspace.spill(content, { name })`.
-   */
-  spill(content: string, opts?: Omit<SpillOpts, "name">): ReturnType<W["spill"]>
 }
 
 export interface StatefulToolContext<
@@ -64,10 +61,26 @@ export type ToolExecutor<W extends Workspace = Workspace> = (
 /** Converts structured tool data into the string the model sees. */
 export type ToolFormatterFn = (data: unknown) => string
 
+/**
+ * How the framework cuts oversized formatted tool output before sending
+ * to the model. The full output is spilled to the workspace either way;
+ * this governs which slice of it survives inline.
+ *
+ * - `head`   — keep the beginning, drop the tail. Default.
+ * - `tail`   — keep the end, drop the head.
+ * - `middle` — keep beginning + end, drop the middle.
+ */
+export type TruncateStrategy = "head" | "tail" | "middle"
+
 export interface Toolkit<W extends Workspace = Workspace> {
   schemas: ToolSchema[]
   execute: ToolExecutor<W>
   formatters: Record<string, ToolFormatterFn>
+  /**
+   * Per-tool truncation strategy. Missing entries default to `"head"`
+   * when read by the framework. Hand-built toolkits may omit this.
+   */
+  truncate?: Record<string, TruncateStrategy>
   dispose?: () => Promise<void>
 }
 
@@ -126,16 +139,59 @@ export function defaultFormatter(
   return JSON.stringify(data)
 }
 
-/** Resolve the formatted string for a tool output, falling back to `defaultFormatter`. */
-export function formatToolOutput(
+/**
+ * Context for framework-level truncation. When passed, `formatToolOutput`
+ * checks the rendered string against `maxInline` and, if over, spills the
+ * full content to the workspace and returns a truncated slice with a
+ * neutral hint appended. The slice strategy comes from the toolkit's
+ * declared `truncate` map (defaulting to `"head"`).
+ */
+export interface FormatContext {
+  workspace: Workspace
+  /** Used to derive the spill filename: `<toolName>-<toolUseId>`. */
+  toolUseId: string
+  /** Inline character budget. Defaults to {@link DEFAULT_MAX_INLINE}. */
+  maxInline?: number
+}
+
+/**
+ * Resolve the formatted string for a tool output. When `ctx` is supplied,
+ * the framework additionally enforces an inline size budget: oversized
+ * output is spilled to the workspace and replaced with a size-strategy
+ * slice plus a neutral hint. When `ctx` is omitted (tests, non-engine
+ * callers), the function just renders — no spill, no size check.
+ */
+export async function formatToolOutput(
   toolkit: Toolkit<any>,
   toolName: string,
   output: ToolOutput,
-): string {
+  ctx?: FormatContext,
+): Promise<string> {
   const formatter = toolkit.formatters[toolName]
-  if (!formatter) {
-    return defaultFormatter(toolName, output)
+  const rendered = formatter
+    ? renderWithFormatter(formatter, output)
+    : defaultFormatter(toolName, output)
+
+  if (!ctx) {
+    return rendered
   }
+  const maxInline = ctx.maxInline ?? DEFAULT_MAX_INLINE
+  if (rendered.length <= maxInline) {
+    return rendered
+  }
+
+  const strategy = toolkit.truncate?.[toolName] ?? "head"
+  const spill = await ctx.workspace.spill(rendered, {
+    name: `${toolName}-${ctx.toolUseId}`,
+  })
+  const slice = sliceByStrategy(rendered, maxInline, strategy)
+  return `${slice}\n\n[Full output at ${spill.uri} (${spill.bytes} bytes).]`
+}
+
+function renderWithFormatter(
+  formatter: ToolFormatterFn,
+  output: ToolOutput,
+): string {
   if (output.ok) {
     return formatter(output.data)
   }
@@ -143,6 +199,69 @@ export function formatToolOutput(
     return output.error
   }
   return `${output.error}\n${formatter(output.data)}`
+}
+
+/**
+ * Chars we're willing to spend searching for a newline near the cut,
+ * either direction. Bounded so a pathological line doesn't swallow
+ * arbitrary tokens trying to end on a boundary.
+ */
+const SNAP_WINDOW = 200
+
+/**
+ * Walk backward from `maxCut` up to SNAP_WINDOW chars looking for a
+ * newline; return the position just after it so the slice ends on a
+ * clean line boundary. Falls through to `maxCut` if no newline sits
+ * within the window.
+ */
+function snapHeadCut(content: string, maxCut: number): number {
+  const minCut = Math.max(0, maxCut - SNAP_WINDOW)
+  const nl = content.lastIndexOf("\n", maxCut - 1)
+  return nl >= minCut ? nl + 1 : maxCut
+}
+
+/**
+ * Walk forward from `minCut` up to SNAP_WINDOW chars looking for a
+ * newline; return the position just after it so the following slice
+ * starts on a clean line. Falls through to `minCut` if no newline
+ * sits within the window.
+ */
+function snapTailCut(content: string, minCut: number): number {
+  const maxCut = Math.min(content.length, minCut + SNAP_WINDOW)
+  const nl = content.indexOf("\n", minCut)
+  return nl >= 0 && nl < maxCut ? nl + 1 : minCut
+}
+
+function sliceByStrategy(
+  content: string,
+  size: number,
+  strategy: TruncateStrategy,
+): string {
+  switch (strategy) {
+    case "head": {
+      const cut = snapHeadCut(content, size)
+      const omitted = content.length - cut
+      return `${content.slice(0, cut)}\n\n[... ${omitted} characters truncated ...]`
+    }
+    case "tail": {
+      const cut = snapTailCut(content, content.length - size)
+      const omitted = cut
+      return `[... ${omitted} characters truncated ...]\n\n${content.slice(cut)}`
+    }
+    case "middle": {
+      const half = Math.floor(size / 2)
+      let headCut = snapHeadCut(content, half)
+      let tailCut = snapTailCut(content, content.length - half)
+      // Guard: with small budgets the two snap windows can cross. Fall
+      // back to exact cuts when that happens.
+      if (tailCut <= headCut) {
+        headCut = half
+        tailCut = content.length - half
+      }
+      const omitted = tailCut - headCut
+      return `${content.slice(0, headCut)}\n\n[... ${omitted} characters truncated ...]\n\n${content.slice(tailCut)}`
+    }
+  }
 }
 
 /** State lifecycle for stateful tools. */
@@ -200,6 +319,7 @@ export function tool<T extends z.ZodType, D = unknown>(
     state?: undefined
     execute: ExecuteFn<z.infer<T>, ToolContext, D>
     format?: (data: D) => string
+    truncate?: TruncateStrategy
   },
 ): Toolkit
 
@@ -210,6 +330,7 @@ export function tool<S, T extends z.ZodType, D = unknown>(
     state: StateConfig<S>
     execute: ExecuteFn<z.infer<T>, StatefulToolContext<S>, D>
     format?: (data: D) => string
+    truncate?: TruncateStrategy
   },
 ): Toolkit
 
@@ -221,6 +342,7 @@ export function tool<W extends Workspace>(): {
       state?: undefined
       execute: ExecuteFn<z.infer<T>, ToolContext<W>, D>
       format?: (data: D) => string
+      truncate?: TruncateStrategy
     },
   ): Toolkit<W>
 
@@ -230,6 +352,7 @@ export function tool<W extends Workspace>(): {
       state: StateConfig<S>
       execute: ExecuteFn<z.infer<T>, StatefulToolContext<S, W>, D>
       format?: (data: D) => string
+      truncate?: TruncateStrategy
     },
   ): Toolkit<W>
 }
@@ -248,6 +371,7 @@ function _tool(def: {
   state?: StateConfig<any>
   execute: (args: any, ctx: any) => ToolExecuteReturn
   format?: (data: unknown) => string
+  truncate?: TruncateStrategy
   strict?: boolean
 }): Toolkit<any> {
   const jsonSchema = z.toJSONSchema(def.parameters, {
@@ -261,8 +385,9 @@ function _tool(def: {
     strict: def.strict,
   }
   const formatters = def.format ? { [def.name]: def.format } : {}
+  const truncate = def.truncate ? { [def.name]: def.truncate } : {}
   const createRuntime = (): Toolkit<any> =>
-    createSingleToolRuntime(def, schema, formatters)
+    createSingleToolRuntime(def, schema, formatters, truncate)
 
   let directRuntime: Toolkit<any> | undefined
   const getDirectRuntime = () => (directRuntime ??= createRuntime())
@@ -271,6 +396,7 @@ function _tool(def: {
     schemas: [schema],
     execute: (name, args, ctx) => getDirectRuntime().execute(name, args, ctx),
     formatters,
+    truncate,
     dispose: async () => {
       if (!directRuntime) {
         return
@@ -307,6 +433,7 @@ export function merge<T extends readonly Toolkit<any>[]>(
   ...toolkits: T
 ): Toolkit<MergedWorkspace<T>> {
   const formatters: Record<string, ToolFormatterFn> = {}
+  const truncate: Record<string, TruncateStrategy> = {}
   const schemaMap = new Map<string, ToolSchema>()
 
   for (const tk of toolkits) {
@@ -314,6 +441,9 @@ export function merge<T extends readonly Toolkit<any>[]>(
       schemaMap.set(schema.name, schema)
     }
     Object.assign(formatters, tk.formatters)
+    if (tk.truncate) {
+      Object.assign(truncate, tk.truncate)
+    }
   }
 
   const createRuntime = (): Toolkit<MergedWorkspace<T>> => {
@@ -351,6 +481,7 @@ export function merge<T extends readonly Toolkit<any>[]>(
       schemas: [...schemaMap.values()],
       execute,
       formatters,
+      truncate,
       dispose,
     }
   }
@@ -362,6 +493,7 @@ export function merge<T extends readonly Toolkit<any>[]>(
     schemas: [...schemaMap.values()],
     execute: (name, args, ctx) => getDirectRuntime().execute(name, args, ctx),
     formatters,
+    truncate,
     dispose: async () => {
       if (!directRuntime) {
         return
@@ -390,10 +522,12 @@ function createSingleToolRuntime(
     state?: StateConfig<any>
     execute: (args: any, ctx: any) => ToolExecuteReturn
     format?: (data: unknown) => string
+    truncate?: TruncateStrategy
     strict?: boolean
   },
   schema: ToolSchema,
   formatters: Record<string, ToolFormatterFn>,
+  truncate: Record<string, TruncateStrategy>,
 ): Toolkit<any> {
   let slot: ToolRuntimeSlot<unknown> = { status: "cold" }
 
@@ -488,6 +622,7 @@ function createSingleToolRuntime(
     schemas: [schema],
     execute,
     formatters,
+    truncate,
     dispose,
   }
 }

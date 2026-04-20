@@ -19,9 +19,6 @@ import {
 
 const CPU_LIMIT_SEC = 60
 const TIMEOUT_MS = 65_000
-const INLINE_CAP = 25_000
-const PREVIEW_HEAD = 10_000
-const PREVIEW_TAIL = 10_000
 const HARD_LIMIT = 5 * 1024 * 1024
 
 type ShellArgs = z.infer<typeof parameters>
@@ -60,10 +57,6 @@ const parameters = z.object({
  * one call affects the next. Runs under `sandbox-exec` by default
  * (writes restricted to rw roots; reads unrestricted).
  *
- * Output over {@link INLINE_CAP} bytes is head+tail-previewed inline
- * and spilled in full to the workspace; the model drills into the
- * spill via `read_file`.
- *
  * @param opts.cwd - Starting working directory (default: first root).
  * @param opts.sandbox - `true` (default) restricts writes, `false`
  *   disables sandboxing, {@link SandboxConfig} gives fine-grained
@@ -83,8 +76,7 @@ export const shell = (pathCtx: PathContext, opts: ShellOptions = {}) => {
     name: "shell",
     description:
       "Executes a zsh command. Working directory persists between calls." +
-      " Timeout 60s. Long output is middle-truncated inline and" +
-      " spilled in full; read the full output via read_file with offset/limit.",
+      " Timeout 60s.",
     parameters,
     state: {
       init: () => ({
@@ -99,6 +91,7 @@ export const shell = (pathCtx: PathContext, opts: ShellOptions = {}) => {
     },
     execute: (args, ctx) => run(pathCtx, sandbox, snapshot, args, ctx),
     format,
+    truncate: "middle",
   })
 }
 
@@ -115,42 +108,11 @@ async function run(
     return err(raw.error)
   }
 
-  const { stdout, stderr, exitCode, totalBytes } = raw.data
-
-  let inlineStdout = stdout
-  let truncated = false
-  let fullStdoutPath: string | undefined
-
-  if (stdout.length > INLINE_CAP) {
-    const spillResult = await ctx.spill(stdout, {
-      previewHead: PREVIEW_HEAD,
-      previewTail: PREVIEW_TAIL,
-    })
-    inlineStdout = spillResult.preview
-    truncated = true
-    fullStdoutPath = spillResult.path
-  }
-
-  const data: ShellData = {
-    exitCode,
-    stdout: inlineStdout,
-    stderr,
-    truncated,
-    totalBytes,
-    ...(fullStdoutPath ? { fullStdoutPath } : {}),
-  }
-
-  if (exitCode !== 0) {
-    return err(`Command failed with exit code ${exitCode}`, data)
+  const data: ShellData = raw.data
+  if (data.exitCode !== 0) {
+    return err(`Command failed with exit code ${data.exitCode}`, data)
   }
   return ok(data)
-}
-
-interface RawShellResult {
-  stdout: string
-  stderr: string
-  exitCode: number
-  totalBytes: number
 }
 
 async function runProcess(
@@ -158,7 +120,7 @@ async function runProcess(
   sandbox: boolean | SandboxConfig,
   args: ShellArgs,
   ctx: StatefulToolContext<ShellState>,
-): Promise<ToolOutput<RawShellResult>> {
+): Promise<ToolOutput<ShellData>> {
   const enabled = sandbox !== false
   const config = typeof sandbox === "object" ? sandbox : undefined
   const profile = pathCtx.sandboxProfile(config)
@@ -195,16 +157,13 @@ async function runProcess(
 
     let stdout = ""
     let stderr = ""
-    let totalBytes = 0
 
     child.stdout!.on("data", (data: Buffer) => {
-      totalBytes += data.length
       if (stdout.length < HARD_LIMIT) {
         stdout += data
       }
     })
     child.stderr!.on("data", (data: Buffer) => {
-      totalBytes += data.length
       if (stderr.length < HARD_LIMIT) {
         stderr += data
       }
@@ -232,10 +191,7 @@ async function runProcess(
       const sentinelIdx = stdout.lastIndexOf(sentinel)
       if (sentinelIdx !== -1) {
         const newCwd = stdout.slice(sentinelIdx + sentinel.length).trim()
-        const strippedLen = stdout.length - sentinelIdx
         stdout = stdout.slice(0, sentinelIdx)
-        // Don't count ronde's sentinel plumbing as user output.
-        totalBytes = Math.max(0, totalBytes - strippedLen)
         if (newCwd && path.isAbsolute(newCwd)) {
           const cwdCheck = pathCtx.safePath(newCwd, "cwd")
           if (cwdCheck.ok) {
@@ -249,7 +205,6 @@ async function runProcess(
           stdout: stdout.trimEnd(),
           stderr: stderr.trimEnd(),
           exitCode,
-          totalBytes,
         }),
       )
     }
@@ -265,12 +220,6 @@ async function runProcess(
 
 function format(data: ShellData): string {
   let output = data.stdout
-  if (data.truncated && data.fullStdoutPath) {
-    output +=
-      `\n\n[Output truncated (${data.totalBytes} bytes total).` +
-      ` Full output at ${data.fullStdoutPath}.` +
-      ` Use read_file with offset/limit to see specific ranges.]`
-  }
   if (data.exitCode !== 0) {
     if (data.stderr) {
       output += `\n\nSTDERR:\n${data.stderr}`

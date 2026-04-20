@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest"
-import { makePreview } from "@ronde/core/workspace"
 import { MemoryWorkspace, memoryWorkspace } from "../src/workspace.js"
 
 describe("@ronde/mem workspace spill", () => {
@@ -27,17 +26,11 @@ describe("@ronde/mem workspace spill", () => {
     )
   })
 
-  it("builds previews, truncation metadata, and byte counts", async () => {
+  it("reports byte counts for spilled content", async () => {
     const workspace = new MemoryWorkspace("runtime-1")
     const content = "abcdefghij"
-    const result = await workspace.spill(content, {
-      name: "preview",
-      previewHead: 3,
-      previewTail: 2,
-    })
+    const result = await workspace.spill(content, { name: "sized" })
 
-    expect(result.preview).toBe(makePreview(content, 3, 2))
-    expect(result.truncated).toBe(true)
     expect(result.bytes).toBe(Buffer.byteLength(content, "utf-8"))
   })
 })

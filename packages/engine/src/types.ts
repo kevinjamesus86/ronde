@@ -68,6 +68,16 @@ export interface EngineConfig<W extends Workspace = Workspace> {
   signal?: AbortSignal
   hooks?: EngineHooks
   compaction?: CompactionStrategy
+  /**
+   * Framework truncation policy for tool-result rendering. Oversized
+   * formatted output spills to the workspace and is replaced with a
+   * sliced preview plus a neutral hint. See `truncate` on tool
+   * definitions for per-tool slice strategy.
+   */
+  truncation?: {
+    /** Inline character budget per tool result. Default: 25_000. */
+    maxInline?: number
+  }
 }
 
 export interface AgentStepToolCall {

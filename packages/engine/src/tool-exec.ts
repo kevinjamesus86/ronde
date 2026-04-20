@@ -46,6 +46,7 @@ export async function* executeToolCalls<W extends Workspace>(
   approvals: Map<number, boolean>,
   workspace: W,
   journal: Journal,
+  maxInline?: number,
 ): AsyncGenerator<EngineEvent, ToolExecutionResult, unknown> {
   if (pendingToolCalls.length === 0) {
     return { resultParts: [], estimatedTokens: 0 }
@@ -92,11 +93,6 @@ export async function* executeToolCalls<W extends Workspace>(
         messages: history,
         workspace,
         call,
-        spill: (content, opts) =>
-          workspace.spill(content, {
-            ...opts,
-            name: `${call.name}-${call.toolUseId}`,
-          }) as ReturnType<W["spill"]>,
       }
       try {
         const gen = asGenerator(toolkit.execute(tc.name, tc.arguments, toolCtx))
@@ -112,7 +108,11 @@ export async function* executeToolCalls<W extends Workspace>(
       }
     }
 
-    const formatted = formatToolOutput(toolkit, tc.name, output)
+    const formatted = await formatToolOutput(toolkit, tc.name, output, {
+      workspace,
+      toolUseId: tc.toolCallId,
+      maxInline,
+    })
     const resultPart = toolResultPart({
       toolCallId: tc.toolCallId,
       content: formatted,
