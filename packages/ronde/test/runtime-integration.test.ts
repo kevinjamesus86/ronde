@@ -91,7 +91,7 @@ describe("@ronde runtime integration", () => {
         prompt: "structured",
         journal: runtime.journal,
         workspace: runtime.workspace,
-        schema: z.object({ x: z.number() }),
+        output: z.object({ x: z.number() }),
       },
     )
 
@@ -113,7 +113,7 @@ describe("@ronde runtime integration", () => {
       prompt: "structured",
       journal: runtime.journal,
       workspace: runtime.workspace,
-      schema: z.object({ x: z.number() }),
+      output: z.object({ x: z.number() }),
       hooks: {
         preStep(input) {
           preSteps.push(input.turn)
@@ -152,7 +152,7 @@ describe("@ronde runtime integration", () => {
         prompt: "structured",
         journal: runtime.journal,
         workspace: runtime.workspace,
-        schema: z.object({ x: z.number() }),
+        output: z.object({ x: z.number() }),
         tools: echo,
         hooks: {
           approve(call) {

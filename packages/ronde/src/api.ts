@@ -65,7 +65,7 @@ export interface AgenticConfig<W extends Workspace = Workspace> {
   messages?: Message[]
   tools?: Toolkit<W>
   /** Zod schema for structured output. Parsed from the final response. */
-  schema?: z.ZodType
+  output?: z.ZodType
   /** Maximum turns. 0 = unlimited. Default: 0. */
   maxTurns?: number
   effort?: Lax<Effort>
@@ -99,7 +99,7 @@ export type AgenticStreamConfig<W extends Workspace = Workspace> = Omit<
 
 /** Result from `agentic()` and `generate()`. */
 export interface AgenticResult<T = string> {
-  /** Final output — text, or parsed object when `schema` is provided. Omitted when no output was produced. */
+  /** Final output — text, or parsed object when `output` schema is provided. Omitted when no output was produced. */
   output?: T
   steps: AgentStep[]
   history: Message[]
@@ -134,8 +134,8 @@ export async function generate<
   S extends z.ZodType,
   W extends Workspace = Workspace,
 >(
-  backendOrConfig: ConfiguredBackend | (AgenticConfig<W> & { schema: S }),
-  maybeConfig?: AgenticConfig<W> & { schema: S },
+  backendOrConfig: ConfiguredBackend | (AgenticConfig<W> & { output: S }),
+  maybeConfig?: AgenticConfig<W> & { output: S },
 ): Promise<AgenticResult<z.infer<S>>>
 
 export async function generate<W extends Workspace = Workspace>(
@@ -171,8 +171,8 @@ export async function agentic<
   S extends z.ZodType,
   W extends Workspace = Workspace,
 >(
-  backendOrConfig: ConfiguredBackend | (AgenticConfig<W> & { schema: S }),
-  maybeConfig?: AgenticConfig<W> & { schema: S },
+  backendOrConfig: ConfiguredBackend | (AgenticConfig<W> & { output: S }),
+  maybeConfig?: AgenticConfig<W> & { output: S },
 ): Promise<AgenticResult<z.infer<S>>>
 
 export async function agentic<W extends Workspace = Workspace>(
@@ -201,8 +201,8 @@ export async function agentic<W extends Workspace = Workspace>(
   }
 
   let system = config.system
-  if (config.schema) {
-    const instruction = buildSchemaInstruction(config.schema)
+  if (config.output) {
+    const instruction = buildSchemaInstruction(config.output)
     system = system ? system + instruction : instruction
   }
 
@@ -230,8 +230,8 @@ export async function agentic<W extends Workspace = Workspace>(
 
   const lastText = result.steps.at(-1)?.text
 
-  if (config.schema) {
-    const first = tryParseSchema(lastText, config.schema)
+  if (config.output) {
+    const first = tryParseSchema(lastText, config.output)
     if (first.ok) {
       return buildResult(first.data, result)
     }
@@ -257,7 +257,7 @@ export async function agentic<W extends Workspace = Workspace>(
 
     const merged = mergeRuns(result, retryResult)
     const retryText = retryResult.steps.at(-1)?.text
-    const second = tryParseSchema(retryText, config.schema)
+    const second = tryParseSchema(retryText, config.output)
     return buildResult(second.ok ? second.data : undefined, merged)
   }
 
@@ -281,8 +281,8 @@ export function agenticStream<
   S extends z.ZodType,
   W extends Workspace = Workspace,
 >(
-  backendOrConfig: ConfiguredBackend | (AgenticStreamConfig<W> & { schema: S }),
-  maybeConfig?: AgenticStreamConfig<W> & { schema: S },
+  backendOrConfig: ConfiguredBackend | (AgenticStreamConfig<W> & { output: S }),
+  maybeConfig?: AgenticStreamConfig<W> & { output: S },
 ): AsyncGenerator<EngineEvent, AgenticResult<z.infer<S>>>
 
 export function agenticStream<W extends Workspace = Workspace>(
@@ -320,8 +320,8 @@ export async function* agenticStream<W extends Workspace = Workspace>(
   }
 
   let system = config.system
-  if (config.schema) {
-    const instruction = buildSchemaInstruction(config.schema)
+  if (config.output) {
+    const instruction = buildSchemaInstruction(config.output)
     system = system ? system + instruction : instruction
   }
 
@@ -343,8 +343,8 @@ export async function* agenticStream<W extends Workspace = Workspace>(
 
   const lastText = result.steps.at(-1)?.text
 
-  if (config.schema) {
-    const first = tryParseSchema(lastText, config.schema)
+  if (config.output) {
+    const first = tryParseSchema(lastText, config.output)
     if (first.ok) {
       return buildResult(first.data, result)
     }
@@ -367,7 +367,7 @@ export async function* agenticStream<W extends Workspace = Workspace>(
 
     const merged = mergeRuns(result, retryResult)
     const retryText = retryResult.steps.at(-1)?.text
-    const second = tryParseSchema(retryText, config.schema)
+    const second = tryParseSchema(retryText, config.output)
     return buildResult(second.ok ? second.data : undefined, merged)
   }
 

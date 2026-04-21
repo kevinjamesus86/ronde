@@ -203,7 +203,7 @@ describe("@ronde agentic result shaping", () => {
     const backend = mockBackend([textResponse('{"name":"Ada"}')])
     const result = await agentic(backend, {
       prompt: "person",
-      schema: z.object({ name: z.string() }),
+      output: z.object({ name: z.string() }),
     })
 
     expect(result.output).toEqual({ name: "Ada" })
@@ -217,7 +217,7 @@ describe("@ronde agentic result shaping", () => {
 
     const result = await agentic(backend, {
       prompt: "structured",
-      schema: z.object({ ok: z.boolean() }),
+      output: z.object({ ok: z.boolean() }),
     })
 
     expect(result.output).toEqual({ ok: true })
@@ -239,7 +239,7 @@ describe("@ronde agentic result shaping", () => {
     const result = await generate(backend, {
       prompt: "call echo then return JSON",
       tools: echo,
-      schema: z.object({ ok: z.boolean() }),
+      output: z.object({ ok: z.boolean() }),
     })
 
     expect(result.output).toEqual({ ok: true })
@@ -255,30 +255,30 @@ describe("@ronde agentic result shaping", () => {
 
     const result = await agentic(backend, {
       prompt: "structured",
-      schema: z.object({ ok: z.boolean() }),
+      output: z.object({ ok: z.boolean() }),
     })
 
     expect(result.output).toBeUndefined()
   })
 
   it("infers output type from schema across agentic, generate, and agenticStream", async () => {
-    const schema = z.object({ name: z.string() })
+    const output = z.object({ name: z.string() })
 
     const r1 = await agentic(mockBackend([textResponse('{"name":"Ada"}')]), {
       prompt: "p",
-      schema,
+      output,
     })
     void (r1.output satisfies { name: string } | undefined)
 
     const r2 = await generate(mockBackend([textResponse('{"name":"Bob"}')]), {
       prompt: "p",
-      schema,
+      output,
     })
     void (r2.output satisfies { name: string } | undefined)
 
     const gen = agenticStream(mockBackend([textResponse('{"name":"Cat"}')]), {
       prompt: "p",
-      schema,
+      output,
     })
     let next = await gen.next()
     while (!next.done) {
@@ -322,7 +322,7 @@ describe("@ronde agentic result shaping", () => {
 
     const result = await agentic(backend, {
       prompt: "structured",
-      schema: z.object({ ok: z.boolean() }),
+      output: z.object({ ok: z.boolean() }),
     })
 
     expect(result.output).toBeUndefined()
@@ -366,7 +366,7 @@ describe("@ronde streaming and observer dispatch", () => {
     const backend = mockBackend([textResponse('{"name":"Ada"}')])
     const gen = agenticStream(backend, {
       prompt: "person",
-      schema: z.object({ name: z.string() }),
+      output: z.object({ name: z.string() }),
     })
 
     let next = await gen.next()
@@ -387,7 +387,7 @@ describe("@ronde streaming and observer dispatch", () => {
 
     const gen = agenticStream(backend, {
       prompt: "structured",
-      schema: z.object({ ok: z.boolean() }),
+      output: z.object({ ok: z.boolean() }),
     })
 
     const runEnds: unknown[] = []
@@ -414,7 +414,7 @@ describe("@ronde streaming and observer dispatch", () => {
 
     const gen = agenticStream(backend, {
       prompt: "structured",
-      schema: z.object({ ok: z.boolean() }),
+      output: z.object({ ok: z.boolean() }),
     })
 
     let next = await gen.next()
