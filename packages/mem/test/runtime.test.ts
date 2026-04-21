@@ -22,14 +22,16 @@ describe("@ronde/mem createMemRuntime", () => {
     const b = createMemRuntime()
 
     await a.journal.event({ type: "warning", turn: 1, message: "a" })
-    await a.workspace.spill("alpha")
-    await b.workspace.spill("beta")
+    const spillA = await a.workspace.spill("alpha")
+    const spillB = await b.workspace.spill("beta")
 
     expect(a.journal).not.toBe(b.journal)
     expect(a.workspace).not.toBe(b.workspace)
     expect(a.journal.id).not.toBe(b.journal.id)
-    expect(a.workspace.resources.size).toBe(1)
-    expect(b.workspace.resources.size).toBe(1)
-    expect(a.workspace.resources).not.toBe(b.workspace.resources)
+    // Each workspace only reads its own spill.
+    expect(a.workspace.read(spillA.uri)).toBe("alpha")
+    expect(a.workspace.read(spillB.uri)).toBeUndefined()
+    expect(b.workspace.read(spillB.uri)).toBe("beta")
+    expect(b.workspace.read(spillA.uri)).toBeUndefined()
   })
 })

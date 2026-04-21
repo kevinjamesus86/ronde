@@ -8,7 +8,7 @@ describe("@ronde/mem workspace spill", () => {
     const result = await workspace.spill("hello", { name: "note" })
 
     expect(result.uri).toBe("memory://workspace/runtime-1/note.txt")
-    expect(workspace.resources.get(result.uri)).toBe("hello")
+    expect(workspace.read(result.uri)).toBe("hello")
   })
 
   it("sanitizes provided spill names", async () => {

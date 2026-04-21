@@ -8,7 +8,7 @@ import {
 
 export class MemoryWorkspace extends Workspace {
   readonly kind = "memory" as const
-  readonly resources = new Map<string, string>()
+  #resources = new Map<string, string>()
 
   constructor(readonly id = genId("rt")) {
     super()
@@ -17,7 +17,7 @@ export class MemoryWorkspace extends Workspace {
   async spill(content: string, o: SpillOpts = {}): Promise<SpillResult> {
     const base = sanitizeFilename(o.name ?? "") || `spill-${genHex()}`
     const uri = `memory://workspace/${this.id}/${base}.txt`
-    this.resources.set(uri, content)
+    this.#resources.set(uri, content)
     return {
       uri,
       bytes: new TextEncoder().encode(content).length,
@@ -25,7 +25,7 @@ export class MemoryWorkspace extends Workspace {
   }
 
   read(uri: string): string | undefined {
-    return this.resources.get(uri)
+    return this.#resources.get(uri)
   }
 }
 
