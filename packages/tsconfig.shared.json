@@ -19,8 +19,7 @@
       "@ronde/mem": ["./mem/src/index.ts"],
       "@ronde/providers": ["./providers/src/index.ts"],
       "@ronde/tools": ["./tools/src/index.ts"],
-      "ronde": ["./ronde/src/index.ts"],
-      "ronde/*": ["./ronde/src/*.ts"]
+      "ronde": ["./ronde/src/index.ts"]
     }
   }
 }
