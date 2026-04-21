@@ -1,4 +1,4 @@
-import type { Runtime } from "@ronde/core/runtime"
+import type { FsRuntime } from "@ronde/fs"
 import {
   createManagedRuntime,
   type ManagedRuntimeOptions,
@@ -14,6 +14,6 @@ import {
  */
 export async function createRuntime(
   opts: ManagedRuntimeOptions = {},
-): Promise<Runtime> {
+): Promise<FsRuntime> {
   return createManagedRuntime(opts)
 }

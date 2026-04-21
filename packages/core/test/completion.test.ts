@@ -7,6 +7,7 @@ import {
   StopReason,
   type ConfiguredBackend,
 } from "@ronde/core/completion"
+import { drain } from "@ronde/core/stream"
 
 describe("@ronde/core completion contracts", () => {
   it("treats rate limit, server, and network errors as retryable", () => {
@@ -91,13 +92,15 @@ describe("@ronde/core configured backend contract", () => {
       },
     }
 
-    const response = await backend.complete({
-      model: "test-model",
-      messages: [],
-      tools: [],
-      effort: Effort.Low,
-      maxOutput: 512,
-    })
+    const response = await drain(
+      backend.complete({
+        model: "test-model",
+        messages: [],
+        tools: [],
+        effort: Effort.Low,
+        maxOutput: 512,
+      }),
+    )
 
     expect(backend.specVersion).toBe("v1")
     expect(response.stopReason).toBe(StopReason.EndTurn)

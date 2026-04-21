@@ -13,14 +13,13 @@ import {
 import { type JournalEvent, Journal } from "@ronde/core/journal"
 import { err } from "@ronde/core/result"
 import {
-  type Awaitable,
   MessageType,
   Role,
   type Message,
   type MessagePart,
   type ToolCallPart,
 } from "@ronde/core/message"
-import { type ToolCall } from "@ronde/core/tool"
+import { type Awaitable, type ToolCall } from "@ronde/core/tool"
 import { type Toolkit } from "@ronde/core/toolkit"
 import { utf8ByteLength } from "@ronde/core/bytes"
 import {
@@ -37,7 +36,6 @@ import {
 
 const DEFAULT_CONFIG: ResolvedBackendConfig = {
   model: "mock",
-  effort: undefined,
   maxContext: 200_000,
   maxOutput: 64_000,
 }

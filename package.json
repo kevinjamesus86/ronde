@@ -21,34 +21,6 @@
     ".": {
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
-    },
-    "./toolkit": {
-      "types": "./dist/toolkit.d.mts",
-      "default": "./dist/toolkit.mjs"
-    },
-    "./stream": {
-      "types": "./dist/stream.d.mts",
-      "default": "./dist/stream.mjs"
-    },
-    "./tools": {
-      "types": "./dist/tools/index.d.mts",
-      "default": "./dist/tools/index.mjs"
-    },
-    "./journal": {
-      "types": "./dist/journal.d.mts",
-      "default": "./dist/journal.mjs"
-    },
-    "./workspace": {
-      "types": "./dist/workspace.d.mts",
-      "default": "./dist/workspace.mjs"
-    },
-    "./errors": {
-      "types": "./dist/completion/errors.d.mts",
-      "default": "./dist/completion/errors.mjs"
-    },
-    "./result": {
-      "types": "./dist/result.d.mts",
-      "default": "./dist/result.mjs"
     }
   },
   "types": "./dist/index.d.mts",
@@ -63,8 +35,9 @@
   "scripts": {
     "prepare": "node scripts/prepare.mjs",
     "build:packages": "npm run build --workspaces --if-present",
-    "build:root": "tsdown && node scripts/strip-const-enums.js",
-    "build": "npm run build:packages && npm run build:root",
+    "build:root": "tsdown",
+    "build:strip": "node scripts/strip-const-enums.mjs",
+    "build": "npm run build:packages && npm run build:root && npm run build:strip",
     "typecheck": "tsc -b packages/tsconfig.packages.json",
     "dev": "tsc -b packages/tsconfig.packages.json --watch",
     "lint": "oxlint packages/",

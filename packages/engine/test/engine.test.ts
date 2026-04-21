@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
 import { StopReason, emptyUsage } from "@ronde/core/completion"
-import { MessageType, userMessage } from "@ronde/core/message"
+import { MessageType, Role, userMessage } from "@ronde/core/message"
 import { JournalEvent } from "@ronde/core/journal"
 import { ok } from "@ronde/core/result"
 import { tool } from "@ronde/core/toolkit"
@@ -409,7 +409,7 @@ describe("@ronde/engine streaming completion", () => {
               { type: MessageType.Think, content: "plan-1plan-2" },
               {
                 type: MessageType.Text,
-                role: "assistant" as const,
+                role: Role.Assistant,
                 content: "hello world",
               },
             ],

@@ -16,7 +16,6 @@ const baseRequest: CompletionRequest = {
   system: "",
   messages: [assistantMessage([thinkingPart("private")])],
   tools: [],
-  effort: undefined,
   maxOutput: 256,
 }
 

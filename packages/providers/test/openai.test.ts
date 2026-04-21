@@ -26,7 +26,6 @@ const baseRequest: CompletionRequest = {
   system: "be helpful",
   messages: [],
   tools: [],
-  effort: undefined,
   maxOutput: 256,
 }
 

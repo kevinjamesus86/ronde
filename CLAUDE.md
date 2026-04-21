@@ -8,9 +8,10 @@ ronde — agentic loop framework for TypeScript. Multi-provider completions, com
 
 ```
 npm test               # package-local unit tests
-npm run build          # per-package tsdown + root bundle + strip const enums
+npm run build          # per-package tsdown → root bundle → strip const enums
 npm run build:packages # per-workspace tsdown only
 npm run build:root     # root monolithic bundle only
+npm run build:strip    # strip `const` from const enums in every emitted .d.mts
 npm run typecheck      # TypeScript across packages/*
 npm run check          # typecheck + oxlint + oxfmt
 npm run lint           # oxlint
@@ -126,14 +127,15 @@ Package-local tests live under `packages/<pkg>/test/*.test.ts`. Vitest runs all 
 
 ## Build
 
-Every workspace package is independently buildable. `npm run build` chains two stages:
+Every workspace package is independently buildable. `npm run build` chains three stages:
 
 - `build:packages` — `npm run build --workspaces --if-present`, runs each sub-package's `tsdown` in the topological order declared in root `workspaces`. Each `@ronde/*` produces its own `packages/<x>/dist/` (ESM `.mjs` + `.d.mts`).
-- `build:root` — the root `tsdown.config.ts` produces the consumer-facing monolithic `dist/` bundle. `scripts/strip-const-enums.js` runs last and patches every `.d.mts` in every dist (root + per-package) so downstream `isolatedModules` consumers can use our enums.
+- `build:root` — the root `tsdown.config.ts` produces the consumer-facing monolithic `dist/` bundle.
+- `build:strip` — `scripts/strip-const-enums.mjs` patches every `.d.mts` in every dist (root + per-package), stripping `const` from each `const enum` so downstream `isolatedModules` consumers can use our enums.
 
 Shared tsdown config lives at `packages/tsdown.shared.js`; each package's `tsdown.config.ts` is three lines over entry points.
 
-Root `ronde` package exposes 6 subpaths for consumers: `ronde/toolkit`, `ronde/tools`, `ronde/journal`, `ronde/workspace`, `ronde/errors`, `ronde/result`. `@ronde/ai-sdk` is a standalone opt-in adapter — consumers install it separately, not via `ronde`.
+Root `ronde` package exposes a single entry point — consumers `import { ... } from "ronde"` for everything: the agentic API, tool primitives, first-party tools, result/journal/workspace types, error types, stream helpers. No subpaths. `@ronde/ai-sdk` is a standalone opt-in adapter — consumers install it separately, not via `ronde`.
 
 TypeScript's composite `tsc -b` build writes to `packages/<x>/.tsc/` (gitignored, type-checking cache only) to avoid colliding with tsdown's `dist/`.
 
@@ -141,7 +143,7 @@ TypeScript's composite `tsc -b` build writes to `packages/<x>/.tsc/` (gitignored
 
 Distributed via GitHub tags, not npm. Each release branch (`release/vX.Y.Z`) ships pre-built `dist/` and native `.node` binaries so consumers install with no Rust toolchain and no bundler.
 
-Cut a release with `npm run release <version>` — the script bumps every `packages/*/package.json` and `Cargo.toml` to match the root version, runs `npm run check` and `npm test`, then commits and tags. Push with `git push && git push origin vX.Y.Z`; CI produces the release branch.
+Cut a release with `npm run release <version>` — the script bumps every `packages/*/package.json` and `Cargo.toml` to match the root version, runs `npm run check`, `npm test`, and `npm run build`, then commits and tags. Push with `git push && git push origin vX.Y.Z`; CI produces the release branch.
 
 The two-step push is intentional. The script stops at the local tag so you can inspect the bump commit before anything leaves the machine. `git push` lands the commit on `main` and lets branch protection / required checks run first; `git push origin vX.Y.Z` then publishes the tag, which is the trigger for the release workflow. Abort is trivial up to that point — delete the local tag, reset the commit, retry.
 

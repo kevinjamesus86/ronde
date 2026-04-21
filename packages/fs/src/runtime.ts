@@ -16,7 +16,9 @@ import type { Runtime } from "@ronde/core/runtime"
 
 const WRITER_LOCK_FILE = "writer.lock"
 
-export type FsRuntime = Runtime<FsWorkspace>
+export interface FsRuntime extends Runtime<FsWorkspace> {
+  journal: FsJournal
+}
 
 export interface FsRuntimeStat {
   id: string

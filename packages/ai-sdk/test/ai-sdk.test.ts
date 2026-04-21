@@ -124,7 +124,6 @@ describe("@ronde/ai-sdk request conversion", () => {
         system: "system prompt",
         messages: [userMessage("hi")],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -165,7 +164,6 @@ describe("@ronde/ai-sdk request conversion", () => {
           userMessage("follow up"),
         ],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -206,7 +204,6 @@ describe("@ronde/ai-sdk request conversion", () => {
         model: "test",
         messages: [assistantWithThinking],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
       } as any),
     )
@@ -245,7 +242,6 @@ describe("@ronde/ai-sdk request conversion", () => {
             inputSchema: { type: "object" },
           },
         ],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -290,7 +286,6 @@ describe("@ronde/ai-sdk request conversion", () => {
             strict: true,
           },
         ],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -335,7 +330,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -365,7 +359,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -391,7 +384,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -430,7 +422,6 @@ describe("@ronde/ai-sdk response conversion", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
       }),
     )
@@ -506,7 +497,6 @@ describe("@ronde/ai-sdk adapter", () => {
         model: "test",
         messages: [userMessage("hi")],
         tools: [],
-        effort: undefined,
         maxOutput: 100,
         providerOptions: {
           openai: {
@@ -565,7 +555,6 @@ describe("@ronde/ai-sdk adapter", () => {
       model: "test",
       messages: [userMessage("go")],
       tools: [],
-      effort: undefined,
       maxOutput: 100,
     }) as AsyncGenerator<any, any, void>
     let next = await gen.next()

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { PathContext } from "../src/context.js"
 import { listDirectory } from "../src/list-directory.js"
+import type { ListDirectoryData } from "../src/types.js"
 import { execTool, TestDirectoryWorkspace, useTmp } from "./support.js"
 
 const tmp = useTmp()
@@ -17,7 +18,7 @@ describe("@ronde/tools list_directory", () => {
     const toolkit = listDirectory(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ListDirectoryData>(
       toolkit,
       "list_directory",
       { path: root, depth: 2 },
@@ -43,7 +44,7 @@ describe("@ronde/tools list_directory", () => {
     const toolkit = listDirectory(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ListDirectoryData>(
       toolkit,
       "list_directory",
       { path: root, depth: 2 },
@@ -70,7 +71,7 @@ describe("@ronde/tools list_directory", () => {
     const toolkit = listDirectory(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ListDirectoryData>(
       toolkit,
       "list_directory",
       { path: root, depth: 1 },
@@ -93,7 +94,7 @@ describe("@ronde/tools list_directory", () => {
     const toolkit = listDirectory(new PathContext([root]), { gitignore: false })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ListDirectoryData>(
       toolkit,
       "list_directory",
       { path: root, depth: 1 },
@@ -115,7 +116,7 @@ describe("@ronde/tools list_directory", () => {
     const toolkit = listDirectory(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ListDirectoryData>(
       toolkit,
       "list_directory",
       { path: outside, depth: 1 },

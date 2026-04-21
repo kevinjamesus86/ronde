@@ -181,7 +181,7 @@ describe("@ronde runtime integration", () => {
           "too long",
         )
       }
-      if (req.mode === "compaction") {
+      if (req.system?.includes("continuation context")) {
         return textResponse("Summary of prior work")
       }
       return textResponse("post-compaction reply")
@@ -213,7 +213,7 @@ describe("@ronde runtime integration", () => {
           "too long",
         )
       }
-      if (req.mode === "compaction") {
+      if (req.system?.includes("continuation context")) {
         return textResponse("Summary")
       }
       return textResponse("after")

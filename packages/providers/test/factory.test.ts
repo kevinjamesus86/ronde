@@ -179,8 +179,6 @@ describe("@ronde/providers createBackend", () => {
         system: "",
         messages: [],
         tools: [],
-        mode: "agentic",
-        effort: undefined,
         maxOutput: 128,
       }),
     ).resolves.toBe(response)

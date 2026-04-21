@@ -2,6 +2,7 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { readFile } from "../src/read-file.js"
 import { PathContext } from "../src/context.js"
+import type { ReadFileData } from "../src/types.js"
 import { execTool, TestDirectoryWorkspace, useTmp } from "./support.js"
 
 const tmp = useTmp()
@@ -15,7 +16,7 @@ describe("@ronde/tools read_file", () => {
     const toolkit = readFile(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       { file_path: path.join(root, "file.txt") },
@@ -35,7 +36,7 @@ describe("@ronde/tools read_file", () => {
     const toolkit = readFile(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       {
@@ -62,7 +63,7 @@ describe("@ronde/tools read_file", () => {
     const toolkit = readFile(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       { file_path: path.join(outside, "file.txt") },
@@ -78,7 +79,7 @@ describe("@ronde/tools read_file", () => {
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
     const file = path.join(root, "missing.txt")
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       { file_path: file },
@@ -98,7 +99,7 @@ describe("@ronde/tools read_file", () => {
     const toolkit = readFile(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       { file_path: file },
@@ -119,7 +120,7 @@ describe("@ronde/tools read_file", () => {
     const toolkit = readFile(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       { file_path: file },
@@ -140,7 +141,7 @@ describe("@ronde/tools read_file", () => {
     const toolkit = readFile(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       { file_path: file },
@@ -161,7 +162,7 @@ describe("@ronde/tools read_file", () => {
     const toolkit = readFile(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ReadFileData>(
       toolkit,
       "read_file",
       { file_path: file, offset: 100 },

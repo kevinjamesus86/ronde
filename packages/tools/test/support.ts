@@ -10,6 +10,7 @@ import {
 } from "@ronde/core/workspace"
 import type { Toolkit, ToolOutput } from "@ronde/core/toolkit"
 import type { ToolCall } from "@ronde/core/tool"
+import { drain } from "@ronde/core/stream"
 
 export type FileTree = { [key: string]: string | FileTree }
 
@@ -73,12 +74,12 @@ export class TestDirectoryWorkspace extends DirectoryWorkspace {
   }
 }
 
-export async function execTool(
-  toolkit: Toolkit<Workspace>,
+export async function execTool<D = unknown>(
+  toolkit: Toolkit<any>,
   name: string,
   args: Record<string, unknown>,
   workspace: Workspace,
-): Promise<ToolOutput> {
+): Promise<ToolOutput<D>> {
   const abort = new AbortController()
   const call: ToolCall = {
     toolUseId: "toolu_1",
@@ -86,11 +87,13 @@ export async function execTool(
     arguments: args,
   }
 
-  return toolkit.execute(name, args, {
-    turn: 1,
-    abort: abort.signal,
-    messages: [],
-    workspace,
-    call,
-  })
+  return drain(
+    toolkit.execute(name, args, {
+      turn: 1,
+      abort: abort.signal,
+      messages: [],
+      workspace,
+      call,
+    }),
+  ) as Promise<ToolOutput<D>>
 }

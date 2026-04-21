@@ -1,6 +1,6 @@
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { Workspace } from "@ronde/core/workspace"
+import { Workspace, type SpillResult } from "@ronde/core/workspace"
 import { PathContext } from "../src/context.js"
 import { pathContextForWorkspace } from "../src/workspace-path.js"
 import { TestDirectoryWorkspace, useTmp } from "./support.js"
@@ -12,7 +12,7 @@ class TestWorkspace extends Workspace {
     super()
   }
 
-  async spill() {
+  async spill(): Promise<SpillResult> {
     throw new Error("unused")
   }
 }

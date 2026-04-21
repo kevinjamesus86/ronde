@@ -426,8 +426,9 @@ describe("@ronde/engine progress event taxonomy", () => {
     // Message state event was dropped when the taxonomy collapsed to
     // three kinds (lifecycle / progress / diagnostic). This guards
     // against accidental reintroduction — durable "message" events
-    // still land in the journal via sendAssistantResponse/send.
-    expect(events.some((ev) => ev.type === "message")).toBe(false)
+    // still land in the journal via sendAssistantResponse/send. Cast
+    // widens the literal-union so the comparison compiles.
+    expect(events.some((ev) => (ev.type as string) === "message")).toBe(false)
   })
 })
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import { z } from "zod/v4"
 import { ok } from "@ronde/core/result"
+import { drain } from "@ronde/core/stream"
 import { bindToolkitRuntime, merge, tool } from "@ronde/core/toolkit"
 import type { ToolContext } from "@ronde/core/toolkit"
 import {
@@ -27,9 +28,9 @@ describe("@ronde/core toolkit runtime lifecycle", () => {
       execute: async (_args, ctx) => ok(ctx.state.count),
     })
 
-    const p1 = toolkit.execute("counter", {}, stubCtx())
-    const p2 = toolkit.execute("counter", {}, stubCtx())
-    const p3 = toolkit.execute("counter", {}, stubCtx())
+    const p1 = drain(toolkit.execute("counter", {}, stubCtx()))
+    const p2 = drain(toolkit.execute("counter", {}, stubCtx()))
+    const p3 = drain(toolkit.execute("counter", {}, stubCtx()))
 
     release()
     const results = await Promise.all([p1, p2, p3])
@@ -169,6 +170,7 @@ function stubCtx(
 }
 
 class RecordingWorkspace extends Workspace {
+  readonly id = "recording"
   readonly kind = "recording" as const
 
   async spill(_content: string, _opts?: SpillOpts): Promise<SpillResult> {

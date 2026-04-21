@@ -7,6 +7,6 @@
     "rootDir": "..",
     "sourceMap": true
   },
-  "include": ["src"],
+  "include": ["src", "test"],
   "references": [{ "path": "../backend" }, { "path": "../core" }]
 }

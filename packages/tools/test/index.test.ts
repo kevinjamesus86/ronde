@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { coreTools } from "../src/index.js"
+import type { GlobData, ShellData } from "../src/types.js"
 import { execTool, TestDirectoryWorkspace, useTmp } from "./support.js"
 
 const tmp = useTmp()
@@ -49,7 +50,7 @@ describe("@ronde/tools coreTools", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const glob = await execTool(
+    const glob = await execTool<GlobData>(
       toolkit,
       "glob_files",
       { path: root, pattern: "**/*.txt" },
@@ -61,7 +62,7 @@ describe("@ronde/tools coreTools", () => {
       expect(glob.data.matches).toEqual(["ignored.txt", "kept.txt"])
     }
 
-    const shell = await execTool(
+    const shell = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: "pwd" },

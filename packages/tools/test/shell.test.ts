@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { PathContext } from "../src/context.js"
 import { shell } from "../src/shell.js"
+import type { ShellData } from "../src/types.js"
 import { execTool, TestDirectoryWorkspace, useTmp } from "./support.js"
 
 const tmp = useTmp()
@@ -22,7 +23,7 @@ describe("@ronde/tools shell", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: "pwd" },
@@ -45,13 +46,13 @@ describe("@ronde/tools shell", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const first = await execTool(
+    const first = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: `cd ${JSON.stringify(subdir)}` },
       workspace,
     )
-    const second = await execTool(
+    const second = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: "pwd" },
@@ -84,7 +85,7 @@ describe("@ronde/tools shell", () => {
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
     try {
-      const result = await execTool(
+      const result = await execTool<ShellData>(
         toolkit,
         "shell",
         { command: `touch ${JSON.stringify(file)}` },
@@ -108,7 +109,7 @@ describe("@ronde/tools shell", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: `touch ${JSON.stringify(file)}` },
@@ -127,7 +128,7 @@ describe("@ronde/tools shell", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: "echo boom >&2; exit 7" },
@@ -155,7 +156,7 @@ describe("@ronde/tools shell", () => {
       })
       const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-      const result = await execTool(
+      const result = await execTool<ShellData>(
         toolkit,
         "shell",
         { command: "env | sort" },
@@ -191,7 +192,7 @@ describe("@ronde/tools shell", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: "ronde_greet" },

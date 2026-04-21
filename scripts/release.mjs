@@ -84,6 +84,7 @@ bumpCargoToml(cargoToml)
 console.log("running verification")
 sh("npm", ["run", "check"])
 sh("npm", ["test"])
+sh("npm", ["run", "build"])
 
 console.log("committing")
 sh("git", ["add", "-u"])

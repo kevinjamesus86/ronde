@@ -3,6 +3,7 @@ import { z } from "zod/v4"
 import { StopReason, emptyUsage } from "@ronde/core/completion"
 import { MessageType, Role } from "@ronde/core/message"
 import { ok } from "@ronde/core/result"
+import { drain } from "@ronde/core/stream"
 import { tool } from "@ronde/core/toolkit"
 import {
   contextLengthExceeded,
@@ -285,15 +286,17 @@ describe("@ronde/engine commit boundaries", () => {
         },
         compaction: {
           async compact(ctx) {
-            const response = await ctx.backend.complete({
-              model: ctx.model,
-              system: "compact",
-              messages: ctx.history,
-              tools: [],
-              effort: ctx.effort,
-              maxOutput: ctx.maxOutput,
-              signal: ctx.signal,
-            })
+            const response = await drain(
+              ctx.backend.complete({
+                model: ctx.model,
+                system: "compact",
+                messages: ctx.history,
+                tools: [],
+                effort: ctx.effort,
+                maxOutput: ctx.maxOutput,
+                signal: ctx.signal,
+              }),
+            )
             return {
               kind: "compacted",
               summary: {
@@ -346,15 +349,17 @@ describe("@ronde/engine commit boundaries", () => {
         },
         compaction: {
           async compact(ctx) {
-            const response = await ctx.backend.complete({
-              model: ctx.model,
-              system: "compact",
-              messages: ctx.history,
-              tools: [],
-              effort: ctx.effort,
-              maxOutput: ctx.maxOutput,
-              signal: ctx.signal,
-            })
+            const response = await drain(
+              ctx.backend.complete({
+                model: ctx.model,
+                system: "compact",
+                messages: ctx.history,
+                tools: [],
+                effort: ctx.effort,
+                maxOutput: ctx.maxOutput,
+                signal: ctx.signal,
+              }),
+            )
             return {
               kind: "compacted",
               summary: {

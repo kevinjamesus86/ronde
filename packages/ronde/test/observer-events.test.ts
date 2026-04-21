@@ -27,12 +27,12 @@ describe("@ronde observer events", () => {
             "too many tokens",
           )
         }
-        if (request.mode === "compaction") {
+        if (request.system?.includes("continuation context")) {
           return textResponse("summary")
         }
         return textResponse("done")
       },
-      { config: { maxContext: 1000, maxOutput: 200 } },
+      { maxContext: 1000, maxOutput: 200 },
     )
 
     await agentic(backend, {
@@ -68,12 +68,12 @@ describe("@ronde observer events", () => {
             "too many tokens",
           )
         }
-        if (request.mode === "compaction") {
+        if (request.system?.includes("continuation context")) {
           return textResponse("summary", { outputTokens: 9 })
         }
         return textResponse("done")
       },
-      { config: { maxContext: 1000, maxOutput: 200 } },
+      { maxContext: 1000, maxOutput: 200 },
     )
 
     await agentic(backend, {
@@ -129,7 +129,7 @@ describe("@ronde observer events", () => {
     const warnings: string[] = []
     const backend = mockHandler(
       (request) => {
-        if (request.mode === "compaction") {
+        if (request.system?.includes("continuation context")) {
           return textResponse("summary")
         }
         throw new CompletionError(
@@ -137,7 +137,7 @@ describe("@ronde observer events", () => {
           "too many tokens",
         )
       },
-      { config: { maxContext: 1000, maxOutput: 200 } },
+      { maxContext: 1000, maxOutput: 200 },
     )
 
     await agentic(backend, {

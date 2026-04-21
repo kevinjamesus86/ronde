@@ -183,7 +183,6 @@ describe("@ronde/engine preStep hook", () => {
     })
     expect(backend.requests[1]).toMatchObject({
       model: "mock",
-      effort: undefined,
     })
   })
 

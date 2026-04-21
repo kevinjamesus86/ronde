@@ -67,7 +67,6 @@ export async function withEnv<T>(
 
 const DEFAULT_CONFIG: ResolvedBackendConfig = {
   model: "mock-model",
-  effort: undefined,
   maxContext: 200_000,
   maxOutput: 64_000,
 }

@@ -17,7 +17,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
     await strategy.compact({
       backend,
       model: "mock",
-      effort: undefined,
       history: [userMessage("prior")],
       maxOutput: 1000,
     })
@@ -45,7 +44,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
     await strategy.compact({
       backend,
       model: "mock",
-      effort: undefined,
       history: [
         userMessage("start"),
         {
@@ -79,7 +77,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
     await strategy.compact({
       backend,
       model: "mock",
-      effort: undefined,
       history: [userMessage("first"), userMessage("second")],
       maxOutput: 1000,
     })
@@ -107,13 +104,12 @@ describe("@ronde DefaultCompactionStrategy", () => {
     await strategy.compact({
       backend,
       model: "mock",
-      effort: undefined,
       history: [
         userMessage("keep"),
         {
           parts: [
             {
-              type: "tool_use",
+              type: MessageType.ToolUse,
               toolCallId: "call_1",
               name: "search",
               arguments: { q: "x" },
@@ -123,7 +119,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
         {
           parts: [
             {
-              type: "tool_result",
+              type: MessageType.ToolResult,
               toolCallId: "call_1",
               content: "result",
               ok: true,
@@ -163,7 +159,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
     const result = await strategy.compact({
       backend,
       model: "mock",
-      effort: undefined,
       history: [userMessage("prior")],
       maxOutput: 1000,
     })
@@ -181,7 +176,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
     const result = await strategy.compact({
       backend,
       model: "mock",
-      effort: undefined,
       history: [userMessage("prior")],
       maxOutput: 1000,
     })
@@ -208,7 +202,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
     const result = await strategy.compact({
       backend,
       model: "mock",
-      effort: undefined,
       history: [userMessage("prior")],
       maxOutput: 1000,
     })

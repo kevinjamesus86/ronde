@@ -6,6 +6,9 @@ examples/**/*.js
 *.js.map
 .cmd_*
 
+# local smoke test scripts
+.smoke/
+
 # local-only provider config (never tracked, anywhere in tree)
 providers.toml
 

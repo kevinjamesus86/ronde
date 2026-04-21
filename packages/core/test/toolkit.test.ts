@@ -10,7 +10,7 @@ import {
   type ToolContext,
   type Toolkit,
 } from "@ronde/core/toolkit"
-import { isAsyncGenerator } from "@ronde/core/stream"
+import { drain, isAsyncGenerator } from "@ronde/core/stream"
 import { utf8ByteLength } from "@ronde/core/bytes"
 import {
   Workspace,
@@ -471,7 +471,9 @@ describe("@ronde/core tool", () => {
       execute: async (args) => ok(args.x),
     })
 
-    const result = await toolkit.execute("calc", { x: "nope" }, stubCtx())
+    const result = await drain(
+      toolkit.execute("calc", { x: "nope" }, stubCtx()),
+    )
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.error).toContain("Invalid arguments for calc")
@@ -560,7 +562,7 @@ describe("@ronde/core tool — async-generator execute", () => {
     // Validation short-circuits to Promise<err> before execute runs,
     // so the result shape never reflects the generator underneath.
     expect(isAsyncGenerator(ret)).toBe(false)
-    const output = await ret
+    const output = await drain(ret)
     expect(output.ok).toBe(false)
     if (!output.ok) {
       expect(output.error).toContain("Invalid arguments for stream")

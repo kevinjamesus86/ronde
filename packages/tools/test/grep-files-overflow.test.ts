@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { PathContext } from "../src/context.js"
 import { grepFiles } from "../src/grep-files.js"
+import type { GrepData } from "../src/types.js"
 import { execTool, TestDirectoryWorkspace, useTmp } from "./support.js"
 
 const tmp = useTmp()
@@ -13,7 +14,7 @@ describe("@ronde/tools grep_files", () => {
     const toolkit = grepFiles(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<GrepData>(
       toolkit,
       "grep_files",
       { path: root, pattern: ".*", include: "**/*" },
@@ -33,7 +34,7 @@ describe("@ronde/tools grep_files", () => {
     const toolkit = grepFiles(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<GrepData>(
       toolkit,
       "grep_files",
       { path: root, pattern: "hello", include: "**/*.txt" },
@@ -53,7 +54,7 @@ describe("@ronde/tools grep_files", () => {
     const toolkit = grepFiles(new PathContext([root]))
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<GrepData>(
       toolkit,
       "grep_files",
       { path: root, pattern: "hello", include: "**/*.txt" },

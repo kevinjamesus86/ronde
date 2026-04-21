@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { PathContext } from "../src/context.js"
 import { shell } from "../src/shell.js"
+import type { ShellData } from "../src/types.js"
 import { execTool, TestDirectoryWorkspace, useTmp } from "./support.js"
 
 const tmp = useTmp()
@@ -17,7 +18,7 @@ describe("@ronde/tools shell output shaping", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: "yes hello | head -c 40000" },
@@ -40,7 +41,7 @@ describe("@ronde/tools shell output shaping", () => {
     })
     const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
 
-    const result = await execTool(
+    const result = await execTool<ShellData>(
       toolkit,
       "shell",
       { command: "echo -n short" },

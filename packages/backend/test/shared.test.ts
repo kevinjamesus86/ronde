@@ -10,7 +10,11 @@ import {
   userMessage,
   type Message,
 } from "@ronde/core/message"
-import { canonicalize, coalesceByRole } from "../src/shared.js"
+import {
+  canonicalize,
+  coalesceByRole,
+  type NormalizedPart,
+} from "../src/shared.js"
 
 interface OwnMeta {
   provider: "own"
@@ -26,8 +30,10 @@ function isOwnMeta(meta: unknown): meta is OwnMeta {
   )
 }
 
-function textContent(part: { content?: string }): string | undefined {
-  return typeof part.content === "string" ? part.content : undefined
+function textContent(part: NormalizedPart<OwnMeta>): string | undefined {
+  return "content" in part && typeof part.content === "string"
+    ? part.content
+    : undefined
 }
 
 describe("@ronde/backend canonicalize", () => {

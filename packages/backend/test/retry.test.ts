@@ -21,7 +21,6 @@ function request(signal?: AbortSignal): CompletionRequest {
     model: "test-model",
     messages: [userMessage("hello")],
     tools: [],
-    effort: undefined,
     maxOutput: 1024,
     signal,
   }
@@ -44,7 +43,6 @@ function backendFrom(
     specVersion: "v1",
     config: {
       model: "test-model",
-      effort: undefined,
       maxContext: 32_000,
       maxOutput: 4_000,
     },
