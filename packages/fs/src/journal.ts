@@ -23,7 +23,7 @@ export interface FsJournalState {
   activeGeneration: number
 }
 
-export type FsJournalMetaRecord =
+type FsJournalMetaRecord =
   | {
       type: "runtime_created"
       v: 1
