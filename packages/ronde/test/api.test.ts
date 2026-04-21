@@ -4,6 +4,8 @@ import path from "node:path"
 import { z } from "zod/v4"
 import { CompletionError, CompletionErrorKind } from "@ronde/core/completion"
 import { userMessage } from "@ronde/core/message"
+import { ok } from "@ronde/core/result"
+import { tool } from "@ronde/core/toolkit"
 import { registerProvider, type ProviderDescriptor } from "@ronde/providers"
 import { agentic, agenticStream, generate, hydrate } from "../src/index.js"
 import { createManagedRuntime } from "../src/managed.js"
@@ -220,6 +222,29 @@ describe("@ronde agentic result shaping", () => {
 
     expect(result.output).toEqual({ ok: true })
     expect(result.steps).toHaveLength(2)
+  })
+
+  it("generate() runs tool calls and parses the final schema output", async () => {
+    const echo = tool()({
+      name: "echo",
+      description: "Echo",
+      parameters: z.object({ text: z.string() }),
+      execute: async ({ text }) => ok(text),
+    })
+    const backend = mockBackend([
+      toolResponse("echo", { text: "hello" }),
+      textResponse('{"ok":true}'),
+    ])
+
+    const result = await generate(backend, {
+      prompt: "call echo then return JSON",
+      tools: echo,
+      schema: z.object({ ok: z.boolean() }),
+    })
+
+    expect(result.output).toEqual({ ok: true })
+    expect(result.steps).toHaveLength(2)
+    expect(backend.requests).toHaveLength(2)
   })
 
   it("surfaces schema failure when repair cannot produce valid output", async () => {

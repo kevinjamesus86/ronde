@@ -2,9 +2,9 @@
 
 One raw engine, several outer surfaces.
 
-`generate()` is a single-turn convenience API. `agentic()` collects a full
-result. `agenticStream()` yields live engine events. All of them ultimately
-drive the same raw engine package.
+`generate()` is a naming alias over `agentic()` for prompt-first call
+sites. `agentic()` collects a full result. `agenticStream()` yields live
+engine events. All of them ultimately drive the same raw engine package.
 
 ```text
 generate() / agentic() / agenticStream()
@@ -599,6 +599,7 @@ The raw engine is unopinionated about who consumes it.
 
 ```text
 engine()         → yields EngineEvent, returns EngineResult
+generate()       → naming alias over agentic() for prompt-first call sites
 agentic()        → collects everything, returns AgenticResult
 agenticStream()  → yields EngineEvent via for-await
 RunObserver      → ronde callback adapter over EngineEvent

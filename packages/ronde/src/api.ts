@@ -66,16 +66,12 @@ export interface AgenticConfig<W extends Workspace = Workspace> {
   tools?: Toolkit<W>
   /** Zod schema for structured output. Parsed from the final response. */
   schema?: z.ZodType
-  /** Maximum turns. 0 = unlimited. Default: 0 for agentic, 1 for generate. */
+  /** Maximum turns. 0 = unlimited. Default: 0. */
   maxTurns?: number
   effort?: Lax<Effort>
   signal?: AbortSignal
   hooks?: EngineHooks
-  /**
-   * `undefined` uses `DefaultCompactionStrategy`. `false` disables.
-   * `generate()` disables by default — a single-turn call shouldn't
-   * silently round-trip through the model a second time.
-   */
+  /** `undefined` uses `DefaultCompactionStrategy`. `false` disables. */
   compaction?: CompactionStrategy | false
   observers?: RunObserver | RunObserver[]
   /**
@@ -124,10 +120,8 @@ export interface AgenticResult<T = string> {
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
- * Generate a single completion. Equivalent to `agentic()` with
- * `maxTurns: 1`, and with compaction disabled by default — a one-shot
- * call shouldn't silently make an extra model round-trip. Pass an
- * explicit `compaction` to opt in.
+ * Naming alias over `agentic()` for callers reaching for "generate
+ * from a prompt" semantics. Forwards every argument unchanged.
  *
  * ```
  * const { output } = await generate({
@@ -154,18 +148,9 @@ export async function generate<W extends Workspace = Workspace>(
   maybeConfig?: AgenticConfig<W>,
 ): Promise<AgenticResult<unknown>> {
   if (maybeConfig !== undefined) {
-    return agentic(backendOrConfig as ConfiguredBackend, {
-      ...maybeConfig,
-      maxTurns: maybeConfig.maxTurns ?? 1,
-      compaction: maybeConfig.compaction ?? false,
-    })
+    return agentic(backendOrConfig as ConfiguredBackend, maybeConfig)
   }
-  const config = backendOrConfig as AgenticConfig
-  return agentic({
-    ...config,
-    maxTurns: config.maxTurns ?? 1,
-    compaction: config.compaction ?? false,
-  })
+  return agentic(backendOrConfig as AgenticConfig<W>)
 }
 
 /**
