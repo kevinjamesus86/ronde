@@ -39,25 +39,25 @@ describe("@ronde/backend classifyError", () => {
   })
 
   it("maps network-flavored messages to NetworkError", () => {
-    expect(classifyError(null, "fetch failed")).toBe(
+    expect(classifyError(undefined, "fetch failed")).toBe(
       CompletionErrorKind.NetworkError,
     )
-    expect(classifyError(null, "socket reset by peer")).toBe(
+    expect(classifyError(undefined, "socket reset by peer")).toBe(
       CompletionErrorKind.NetworkError,
     )
   })
 
   it("maps safety and content-filter messages to ContentFiltered", () => {
-    expect(classifyError(null, "content filter triggered")).toBe(
+    expect(classifyError(undefined, "content filter triggered")).toBe(
       CompletionErrorKind.ContentFiltered,
     )
-    expect(classifyError(null, "response blocked by safety system")).toBe(
+    expect(classifyError(undefined, "response blocked by safety system")).toBe(
       CompletionErrorKind.ContentFiltered,
     )
   })
 
   it("falls back to Unknown when no signal matches", () => {
-    expect(classifyError(null, "mystery failure")).toBe(
+    expect(classifyError(undefined, "mystery failure")).toBe(
       CompletionErrorKind.Unknown,
     )
   })
@@ -107,7 +107,7 @@ describe("@ronde/backend wrapSdkError", () => {
     })
 
     expect(wrapped.kind).toBe(CompletionErrorKind.NetworkError)
-    expect(wrapped.statusCode).toBeNull()
+    expect(wrapped.statusCode).toBeUndefined()
   })
 
   it("uses nested sdk error.message values when present", () => {

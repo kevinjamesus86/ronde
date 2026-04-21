@@ -8,7 +8,7 @@ import { CompletionError, CompletionErrorKind } from "@ronde/core/completion"
 export { CompletionError, CompletionErrorKind }
 
 export function classifyError(
-  statusCode: number | null,
+  statusCode: number | undefined,
   message: string,
 ): CompletionErrorKind {
   if (statusCode === 401 || statusCode === 403) {
@@ -30,7 +30,7 @@ export function classifyError(
     }
     return CompletionErrorKind.InvalidRequest
   }
-  if (statusCode !== null && statusCode >= 500 && statusCode < 600) {
+  if (statusCode !== undefined && statusCode >= 500 && statusCode < 600) {
     return CompletionErrorKind.ServerError
   }
 
@@ -92,16 +92,16 @@ export function wrapSdkError(err: unknown): CompletionError {
 
   const message = raw.error?.message || raw.message || String(err)
   const statusCode =
-    (typeof raw.status === "number" ? raw.status : null) ??
-    (typeof raw.statusCode === "number" ? raw.statusCode : null) ??
-    (typeof raw.code === "number" ? raw.code : null)
+    (typeof raw.status === "number" ? raw.status : undefined) ??
+    (typeof raw.statusCode === "number" ? raw.statusCode : undefined) ??
+    (typeof raw.code === "number" ? raw.code : undefined)
 
   const codeStr = typeof raw.code === "string" ? raw.code : ""
   const fullMessage = `${message} ${codeStr}`.trim()
   const kind = classifyError(statusCode, fullMessage)
 
   return new CompletionError(kind, message, {
-    statusCode: statusCode ?? undefined,
+    statusCode,
     cause: err,
   })
 }

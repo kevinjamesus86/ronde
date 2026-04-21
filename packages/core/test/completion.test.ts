@@ -42,10 +42,10 @@ describe("@ronde/core completion contracts", () => {
     ).toBe(503)
   })
 
-  it("defaults CompletionError.statusCode to null when omitted", () => {
+  it("leaves CompletionError.statusCode undefined when omitted", () => {
     expect(
       new CompletionError(CompletionErrorKind.Unknown, "boom").statusCode,
-    ).toBeNull()
+    ).toBeUndefined()
   })
 
   it("preserves the original cause on CompletionError", () => {

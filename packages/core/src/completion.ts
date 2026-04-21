@@ -124,7 +124,7 @@ const TRANSIENT_ERROR_KINDS = new Set<CompletionErrorKind>([
 /** Normalized error from any completion backend. */
 export class CompletionError extends Error {
   readonly kind: CompletionErrorKind
-  readonly statusCode: number | null
+  readonly statusCode: number | undefined
   readonly retryable: boolean
 
   constructor(
@@ -138,7 +138,7 @@ export class CompletionError extends Error {
     super(message, { cause: opts?.cause })
     this.name = "CompletionError"
     this.kind = kind
-    this.statusCode = opts?.statusCode ?? null
+    this.statusCode = opts?.statusCode
     this.retryable = TRANSIENT_ERROR_KINDS.has(kind)
   }
 }
