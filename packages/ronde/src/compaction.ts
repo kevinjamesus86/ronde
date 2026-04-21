@@ -74,7 +74,11 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
 
   async compact(ctx: CompactionContext): Promise<CompactionResult> {
     const { backend, model, effort, history } = ctx
-    const working = history.map(stripThinking).filter((m) => m.parts.length > 0)
+    const working = stripThinking(history)
+    // Messages popped off `working` when the compaction call itself
+    // overflows. Kept in chronological order via unshift so the engine
+    // can splice them back into the post-compaction history.
+    const deferred: Message[] = []
 
     while (working.length > 0) {
       const compactInput: Message[] = [
@@ -94,10 +98,6 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
             system: this.compactionSystem,
             messages: compactInput,
             tools: [],
-            // Thinking is enabled for this call so the model can reason
-            // through distillation. Historical thinking is stripped above;
-            // we only extract text parts from the response, so any
-            // thinking output is discarded too.
             effort,
             maxOutput: ctx.maxOutput,
             signal: ctx.signal,
@@ -111,7 +111,7 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
           if (working.length <= 1) {
             break
           }
-          popHistoryItem(working)
+          deferred.unshift(working.pop()!)
           continue
         }
         throw err
@@ -142,6 +142,7 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
             "\n\n---\n\n" +
             this.resumeMessage,
         ),
+        deferred,
         usage: compactResponse.usage,
       }
     }
@@ -150,28 +151,13 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
   }
 }
 
-function stripThinking(message: Message): Message {
-  return {
-    ...message,
-    parts: message.parts.filter((p) => p.type !== MessageType.Think),
-  }
-}
-
-function popHistoryItem(hist: Message[]): number {
-  if (hist.length === 0) {
-    return 0
-  }
-  const last = hist[hist.length - 1]!
-  const hasToolResult = last.parts.some(
-    (p) => p.type === MessageType.ToolResult,
-  )
-  if (hasToolResult && hist.length > 1) {
-    hist.pop()
-    hist.pop()
-    return 2
-  }
-  hist.pop()
-  return 1
+function stripThinking(messages: readonly Message[]): Message[] {
+  return messages
+    .map((m) => ({
+      ...m,
+      parts: m.parts.filter((p) => p.type !== MessageType.Think),
+    }))
+    .filter((m) => m.parts.length > 0)
 }
 
 export type { CompactionContext, CompactionResult, CompactionStrategy }

@@ -36,7 +36,12 @@ describe("@ronde/engine compaction integration", () => {
         async compact(ctx) {
           compactionCalls++
           expect(ctx.history).toEqual([userMessage("go")])
-          return { kind: "compacted", summary, usage: emptyUsage() }
+          return {
+            kind: "compacted",
+            summary,
+            deferred: [],
+            usage: emptyUsage(),
+          }
         },
       },
     })
@@ -70,6 +75,7 @@ describe("@ronde/engine compaction integration", () => {
             return {
               kind: "compacted" as const,
               summary: userMessage("summary"),
+              deferred: [],
               usage: emptyUsage(),
             }
           },
@@ -118,6 +124,7 @@ describe("@ronde/engine compaction integration", () => {
             return {
               kind: "compacted" as const,
               summary: userMessage("summary"),
+              deferred: [],
               usage,
             }
           },
@@ -150,7 +157,12 @@ describe("@ronde/engine compaction integration", () => {
         toolkit: emptyToolkit(),
         compaction: {
           async compact() {
-            return { kind: "compacted" as const, summary, usage: emptyUsage() }
+            return {
+              kind: "compacted" as const,
+              summary,
+              deferred: [],
+              usage: emptyUsage(),
+            }
           },
         },
       },
@@ -181,7 +193,12 @@ describe("@ronde/engine compaction integration", () => {
       toolkit: emptyToolkit(),
       compaction: {
         async compact() {
-          return { kind: "compacted" as const, summary, usage: emptyUsage() }
+          return {
+            kind: "compacted" as const,
+            summary,
+            deferred: [],
+            usage: emptyUsage(),
+          }
         },
       },
     })
@@ -198,7 +215,7 @@ describe("@ronde/engine buffered-turn compaction", () => {
     execute: async (args) => ok(args.text),
   })
 
-  it("buffers current-turn output when context is exceeded mid-turn", async () => {
+  it("buffers current-turn tool pairs when context is exceeded mid-turn", async () => {
     const backend = mockHandler(
       (_request, call) => {
         if (call === 0) {
@@ -217,20 +234,32 @@ describe("@ronde/engine buffered-turn compaction", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },
       },
     })
 
-    expect(backend.requests[1]?.messages).toHaveLength(2)
+    expect(backend.requests[1]?.messages).toHaveLength(3)
     expect(backend.requests[1]?.messages[1]).toEqual(
       expect.objectContaining({
         parts: [
           expect.objectContaining({
             type: MessageType.Text,
+            role: Role.Assistant,
+            content: expect.stringContaining("[assistant tool call] echo"),
+          }),
+        ],
+      }),
+    )
+    expect(backend.requests[1]?.messages[2]).toEqual(
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({
+            type: MessageType.Text,
             role: Role.User,
-            content: expect.stringContaining("[user tool result]"),
+            content: expect.stringContaining("[user tool result] echo"),
           }),
         ],
       }),
@@ -256,18 +285,18 @@ describe("@ronde/engine buffered-turn compaction", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },
       },
     })
 
-    expect(backend.requests[1]?.messages[0]).toEqual(userMessage("summary"))
-    const secondMsg = backend.requests[1]?.messages[1]
+    const messages = backend.requests[1]?.messages ?? []
+    expect(messages[0]).toEqual(userMessage("summary"))
+    const replayed = messages.slice(1)
     expect(
-      secondMsg?.parts.every(
-        (p) => p.type === MessageType.Text && p.role === Role.User,
-      ),
+      replayed.every((m) => m.parts.every((p) => p.type === MessageType.Text)),
     ).toBe(true)
   })
 
@@ -290,21 +319,199 @@ describe("@ronde/engine buffered-turn compaction", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },
       },
     })
 
-    expect(backend.requests[1]?.messages[1]).toEqual({
+    const messages = backend.requests[1]?.messages ?? []
+    const replayedParts = messages
+      .slice(1)
+      .flatMap((m) => m.parts.map((p) => p.type))
+    expect(replayedParts.every((t) => t === MessageType.Text)).toBe(true)
+  })
+})
+
+describe("@ronde/engine deferred replay", () => {
+  const echo = tool()({
+    name: "echo",
+    description: "Echo",
+    parameters: z.object({ text: z.string() }),
+    execute: async (args) => ok(args.text),
+  })
+
+  it("splices deferred text messages after the summary on the reactive path", async () => {
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          return contextLengthExceeded()
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 1000, maxOutput: 200 } },
+    )
+
+    await driveEngine(backend, {
+      prompt: "go",
+      toolkit: emptyToolkit(),
+      compaction: {
+        async compact() {
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            deferred: [userMessage("older-thing")],
+            usage: emptyUsage(),
+          }
+        },
+      },
+    })
+
+    const messages = backend.requests[1]?.messages ?? []
+    expect(messages[0]).toEqual(userMessage("summary"))
+    expect(messages[1]?.parts[0]).toMatchObject({
+      type: MessageType.Text,
+      role: Role.User,
+      content: expect.stringContaining("older-thing"),
+    })
+  })
+
+  it("flattens deferred tool pairs via translateBufferedMessages", async () => {
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          return contextLengthExceeded()
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 1000, maxOutput: 200 } },
+    )
+
+    const deferredPair = {
       parts: [
         {
-          type: MessageType.Text,
-          role: Role.User,
-          content: expect.stringContaining("[user tool result]"),
+          type: MessageType.ToolUse as const,
+          toolCallId: "call_prior",
+          name: "search",
+          arguments: { q: "prior" },
+        },
+        {
+          type: MessageType.ToolResult as const,
+          toolCallId: "call_prior",
+          ok: true,
+          content: "prior result",
         },
       ],
+    }
+
+    await driveEngine(backend, {
+      prompt: "go",
+      toolkit: emptyToolkit(),
+      compaction: {
+        async compact() {
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            deferred: [deferredPair],
+            usage: emptyUsage(),
+          }
+        },
+      },
     })
+
+    const messages = backend.requests[1]?.messages ?? []
+    expect(messages).toHaveLength(3)
+    expect(messages[1]?.parts[0]).toMatchObject({
+      type: MessageType.Text,
+      role: Role.Assistant,
+      content: expect.stringContaining("[assistant tool call] search"),
+    })
+    expect(messages[2]?.parts[0]).toMatchObject({
+      type: MessageType.Text,
+      role: Role.User,
+      content: expect.stringContaining("[user tool result] search"),
+    })
+  })
+
+  it("orders post-compaction history as [summary, ...deferred-replay, ...turn-replay]", async () => {
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          return toolResponse("echo", { text: "hi" })
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 1000, maxOutput: 200 } },
+    )
+
+    await driveEngine(backend, {
+      prompt: "go",
+      toolkit: echo,
+      compaction: {
+        async compact() {
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            deferred: [userMessage("deferred-text")],
+            usage: emptyUsage(),
+          }
+        },
+      },
+    })
+
+    const messages = backend.requests[1]?.messages ?? []
+    expect(messages[0]).toEqual(userMessage("summary"))
+    expect(messages[1]?.parts[0]).toMatchObject({
+      content: expect.stringContaining("deferred-text"),
+    })
+    expect(messages[2]?.parts[0]).toMatchObject({
+      content: expect.stringContaining("[assistant tool call] echo"),
+    })
+    expect(messages[3]?.parts[0]).toMatchObject({
+      content: expect.stringContaining("[user tool result] echo"),
+    })
+  })
+
+  it("writes the full deferred replay into the new compaction partition", async () => {
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          return contextLengthExceeded()
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 1000, maxOutput: 200 } },
+    )
+
+    const { journal } = await driveEngine(backend, {
+      prompt: "go",
+      toolkit: emptyToolkit(),
+      compaction: {
+        async compact() {
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            deferred: [userMessage("deferred-text")],
+            usage: emptyUsage(),
+          }
+        },
+      },
+    })
+
+    expect(journal.archived).toHaveLength(1)
+    // First active event is the summary; second is the flattened deferred.
+    expect(journal.active[0]).toMatchObject({
+      type: "message",
+      message: userMessage("summary"),
+    })
+    expect(journal.active[1]).toMatchObject({ type: "message" })
+    const second = journal.active[1]
+    if (second?.type === "message") {
+      expect(second.message.parts[0]).toMatchObject({
+        content: expect.stringContaining("deferred-text"),
+      })
+    }
   })
 })
 
@@ -333,6 +540,7 @@ describe("@ronde/engine compaction breaker", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },
@@ -444,9 +652,9 @@ describe("@ronde/engine Path B compaction boundaries", () => {
     })
   })
 
-  it("trips the breaker after 3 not_compacted results from Path B", async () => {
+  it("trips the breaker after 3 consecutive compactions without a successful completion", async () => {
     let compactionCalls = 0
-    const backend = mockHandler(() => toolResponse("echo", { text: "hi" }), {
+    const backend = mockHandler(() => contextLengthExceeded(), {
       config: { maxContext: 1000, maxOutput: 200 },
     })
 
@@ -467,9 +675,8 @@ describe("@ronde/engine Path B compaction boundaries", () => {
     expect(
       events.filter((event) => event.type === "compaction_start"),
     ).toHaveLength(3)
-    // Path B never emits compaction_end on not_compacted — it's only
-    // paired with a successful compact. Asserting that here protects
-    // against any future refactor that moves the event placement.
+    // not_compacted never emits compaction_end — only successful
+    // compacts do.
     expect(
       events.filter((event) => event.type === "compaction_end"),
     ).toHaveLength(0)
@@ -494,6 +701,7 @@ describe("@ronde/engine Path B compaction boundaries", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },
@@ -522,42 +730,36 @@ describe("@ronde/engine Path B compaction boundaries", () => {
     expect(postPartition.at(-1)).toBe("run_end")
   })
 
-  it("resets compactionFailures to 0 after a successful compact following prior not_compacted results", async () => {
+  it("resets compactionAttempts when a completion succeeds between compactions", async () => {
     let compactionCalls = 0
-    // Every turn overruns budget so Path B fires each time. The
-    // strategy refuses twice, succeeds once, then refuses again —
-    // the fourth refusal must NOT trip the 3-strike breaker, because
-    // the successful compact in between resets the counter.
-    const backend = mockHandler(() => toolResponse("echo", { text: "hi" }), {
-      config: { maxContext: 1000, maxOutput: 200 },
-    })
+    // Alternate throwing and succeeding so each throw triggers a reactive
+    // compaction but the next completion still returns — exercises the
+    // "completion success clears the counter" path.
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call % 2 === 0) {
+          return contextLengthExceeded()
+        }
+        return toolResponse("echo", { text: "hi" })
+      },
+      { config: { maxContext: 1000, maxOutput: 200 } },
+    )
 
     const { result } = await driveEngine(backend, {
       prompt: "go",
       toolkit: echo,
-      // Cap the run so we can observe without tripping another breaker.
-      maxTurns: 5,
+      maxTurns: 4,
       compaction: {
         async compact() {
           compactionCalls++
-          // fail, fail, succeed, fail, fail
-          if (compactionCalls === 3) {
-            return {
-              kind: "compacted" as const,
-              summary: userMessage("summary"),
-              usage: emptyUsage(),
-            }
-          }
           return { kind: "not_compacted" as const, usage: emptyUsage() }
         },
       },
     })
 
-    expect(compactionCalls).toBeGreaterThanOrEqual(5)
-    // With the reset, we reach maxTurns instead of compaction_failed.
-    // Without the reset, the breaker would trip on the 5th call
-    // (2 fails + 1 success + 2 fails = breaker if counter didn't reset,
-    //  but with reset the trailing streak is only 2 → no trip).
+    // Each throw ticks compactionAttempts; each success resets it.
+    // We never accumulate 3 strikes in a row, so maxTurns settles it.
+    expect(compactionCalls).toBeGreaterThanOrEqual(3)
     expect(result.settleReason).toBe("max_turns")
   })
 })
@@ -611,6 +813,7 @@ describe("@ronde/engine Path B threshold formula", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },
@@ -648,6 +851,7 @@ describe("@ronde/engine Path B threshold formula", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },
@@ -700,6 +904,7 @@ describe("@ronde/engine Path B threshold formula", () => {
           return {
             kind: "compacted" as const,
             summary: userMessage("summary"),
+            deferred: [],
             usage: emptyUsage(),
           }
         },

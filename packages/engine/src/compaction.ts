@@ -19,6 +19,10 @@ export type CompactionResult =
   | {
       kind: "compacted"
       summary: Message
+      // Messages the strategy couldn't fit in its compaction call.
+      // The engine replays these verbatim alongside the summary so
+      // retry-shrink never silently loses history.
+      deferred: Message[]
       usage: UsageStats
     }
   | {

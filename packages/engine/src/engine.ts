@@ -36,7 +36,8 @@ import {
   type SettleReason,
 } from "./types.js"
 import { executeToolCalls } from "./tool-exec.js"
-import { extractToolCalls, translateBufferedMessages } from "./replay.js"
+import { splitResponse, translateBufferedMessages } from "./replay.js"
+import { zip } from "./zip.js"
 
 /**
  * Subset of EngineEvent that is also shaped as a JournalEvent — these
@@ -85,6 +86,10 @@ interface TurnConfig {
  */
 const MAX_CONSECUTIVE_INCOMPLETE = 3
 
+function toList<T extends object>(v: T | readonly T[]): readonly T[] {
+  return Array.isArray(v) ? v : [v as T]
+}
+
 /**
  * The agentic loop, as an async generator.
  *
@@ -121,9 +126,9 @@ const MAX_CONSECUTIVE_INCOMPLETE = 3
  * after a crash pick up cleanly at the last turn boundary.
  *
  * Tool-call/tool-result pairs are journaled atomically from inside
- * `executeToolCalls` — assistant messages here strip `ToolUse` parts
- * before writing, so the durable record never contains an orphaned
- * call without its result.
+ * `executeToolCalls` as a single `{ parts: [tool_use, tool_result] }`
+ * message, so the durable record never contains an orphaned call
+ * without its result.
  *
  * ## Settle reasons (EngineResult.settleReason)
  *
@@ -198,23 +203,37 @@ export async function* engine<W extends Workspace = Workspace>(
     }
   }
 
+  // Seeded from the journal on startup; wiped and rebuilt on compaction.
   const history: Message[] = []
+  // Per-turn digest accumulated across the run.
   const steps: AgentStep[] = []
+  // Ticks on every loop iteration, including retry-after-compaction.
   let turn = 0
+  // Totals across every completion call, including compaction calls.
   let totalInputTokens = 0
   let totalOutputTokens = 0
   let totalCachedTokens = 0
+  // MaxTokens-without-tools breaker. Hits MAX_CONSECUTIVE_INCOMPLETE →
+  // settleReason "cutoff_breaker".
   let consecutiveIncomplete = 0
   let compactionCount = 0
-  let compactionFailures = 0
+  // Consecutive compactions without a successful completion in between.
+  // Reset when a completion returns. Hits 3 → fatal, catching both
+  // pathological single-message overflows and compaction spirals.
+  let compactionAttempts = 0
+  // Default "max_turns" so bounded runs settle cleanly without a
+  // natural stopReason.
   let settleReason: SettleReason = "max_turns"
 
+  // Accumulate a per-call usage delta into the run totals.
   function applyUsage(usage: UsageStats): void {
     totalInputTokens += usage.inputTokens
     totalOutputTokens += usage.outputTokens
     totalCachedTokens += usage.cachedReadTokens
   }
 
+  // Lifecycle events are observed and journaled together — the journal
+  // entry shape differs from the observed event, so record() takes both.
   async function* emitCompactionStart(): AsyncGenerator<EngineEvent, void> {
     const entry = JournalEvent.compactionStart(turn, history.length)
     yield await record(
@@ -237,6 +256,9 @@ export async function* engine<W extends Workspace = Workspace>(
     )
   }
 
+  // Breaker for MaxTokens-without-tools: inject a "continue where you
+  // left off" nudge up to MAX_CONSECUTIVE_INCOMPLETE times, then bail.
+  // Returns true when the run should settle; false to stay in the loop.
   async function* handleCutoff(): AsyncGenerator<EngineEvent, boolean> {
     consecutiveIncomplete++
     if (consecutiveIncomplete >= MAX_CONSECUTIVE_INCOMPLETE) {
@@ -264,8 +286,20 @@ export async function* engine<W extends Workspace = Workspace>(
     return false
   }
 
-  function append(message: Message): void {
-    history.push(message)
+  // In-memory only — no journal write. Use when the journal already
+  // owns the message (atomic tool pairs, partition rewrites).
+  function append(arg: Message | readonly Message[]): void {
+    for (const m of toList(arg)) {
+      history.push(m)
+    }
+  }
+
+  // Durable commit: append to history AND journal each message.
+  async function send(arg: Message | readonly Message[]): Promise<void> {
+    append(arg)
+    for (const m of toList(arg)) {
+      await journal.event(JournalEvent.message(m))
+    }
   }
 
   // Dual-write an event: append to the journal and return it for
@@ -303,12 +337,18 @@ export async function* engine<W extends Workspace = Workspace>(
     return event
   }
 
+  // Run the configured strategy. On success, active history is wiped —
+  // attemptCompaction rebuilds it from the summary (+ buffered replay).
+  // Every attempt ticks compactionAttempts; only a successful completion
+  // call clears it. Three consecutive attempts without a completion in
+  // between is fatal.
   async function doCompact(): Promise<CompactionResult> {
-    if (!compaction || compactionFailures >= 3) {
+    if (!compaction || compactionAttempts >= 3) {
       return { kind: "not_compacted", usage: emptyUsage() }
     }
 
     compactionCount++
+    compactionAttempts++
 
     const result = await compaction.compact({
       backend,
@@ -320,10 +360,7 @@ export async function* engine<W extends Workspace = Workspace>(
     })
 
     if (result.kind === "compacted") {
-      compactionFailures = 0
       history.length = 0
-    } else {
-      compactionFailures++
     }
 
     applyUsage(result.usage)
@@ -331,7 +368,7 @@ export async function* engine<W extends Workspace = Workspace>(
   }
 
   function canAttemptCompaction(): boolean {
-    return Boolean(compaction) && compactionFailures < 3
+    return Boolean(compaction) && compactionAttempts < 3
   }
 
   // Two paths call compaction:
@@ -339,10 +376,10 @@ export async function* engine<W extends Workspace = Workspace>(
   //                completion produced no parts worth replaying, so
   //                only the summary is restored into history.
   //   - preemptive: the budget heuristic tripped after a successful
-  //                 tool-result step. The tool-result message from
-  //                 this turn is `buffered` so it can be translated
-  //                 and replayed after the summary — preserving the
-  //                 model's most-recent context across compaction.
+  //                 tool step. The current turn's tool pairs are
+  //                 `buffered` so they can be translated and replayed
+  //                 after the summary — preserving the model's most-
+  //                 recent context across compaction.
   type CompactionMode =
     | { kind: "reactive" }
     | { kind: "preemptive"; buffered: Message[] }
@@ -369,24 +406,20 @@ export async function* engine<W extends Workspace = Workspace>(
     const result = await doCompact()
     if (result.kind === "compacted") {
       yield* emitCompactionEnd(result.usage)
-      if (mode.kind === "reactive") {
-        await journal.partition("compaction", [
-          JournalEvent.message(result.summary),
-        ])
-        await send(result.summary, false)
-      } else {
-        const replay = translateBufferedMessages(mode.buffered)
-        const nextMessages = [result.summary, ...replay]
-        await journal.partition(
-          "compaction",
-          nextMessages.map((message) => JournalEvent.message(message)),
-        )
-        await send(result.summary, false)
-        await sendAll(replay, false)
-      }
+      const deferredReplay = translateBufferedMessages(result.deferred)
+      const turnReplay =
+        mode.kind === "preemptive"
+          ? translateBufferedMessages(mode.buffered)
+          : []
+      const nextMessages = [result.summary, ...deferredReplay, ...turnReplay]
+      await journal.partition(
+        "compaction",
+        nextMessages.map((message) => JournalEvent.message(message)),
+      )
+      append(nextMessages)
       return "continue"
     }
-    if (compactionFailures >= 3) {
+    if (compactionAttempts >= 3) {
       yield await record(
         diagnosticEvent("error", {
           message: "Compaction failed. Stopping.",
@@ -396,40 +429,6 @@ export async function* engine<W extends Workspace = Workspace>(
       return "fatal"
     }
     return "continue"
-  }
-
-  async function send(msg: Message, durable = true): Promise<void> {
-    append(msg)
-    if (durable) {
-      await journal.event(JournalEvent.message(msg))
-    }
-  }
-
-  async function sendAll(
-    messages: readonly Message[],
-    durable = true,
-  ): Promise<void> {
-    for (const message of messages) {
-      await send(message, durable)
-    }
-  }
-
-  // tool_use parts are stripped from the durable record — they land
-  // as atomic pairs alongside their results (see executeToolCalls).
-  // In-memory history keeps the full shape for downstream turns.
-  async function sendAssistantResponse(message: Message): Promise<void> {
-    append(message)
-    const durableParts = message.parts.filter(
-      (p) => p.type !== MessageType.ToolUse,
-    )
-    if (durableParts.length > 0) {
-      await journal.event(
-        JournalEvent.message({
-          ...message,
-          parts: durableParts,
-        }),
-      )
-    }
   }
 
   await journal.scan((ev) => {
@@ -532,16 +531,17 @@ export async function* engine<W extends Workspace = Workspace>(
         step.usage = response.usage
         step.stopReason = response.stopReason
         applyUsage(response.usage)
+        compactionAttempts = 0
 
         yield* emitResponseProgress(response, turn, step)
 
-        const pendingToolCalls = extractToolCalls(response.messages)
+        const { messages, pendingCalls } = splitResponse(response.messages)
 
         if (
-          pendingToolCalls.length === 0 &&
+          pendingCalls.length === 0 &&
           response.stopReason === StopReason.MaxTokens
         ) {
-          await sendAll(response.messages)
+          await send(messages)
           yield* finalizeStep()
           if (yield* handleCutoff()) {
             break
@@ -551,11 +551,9 @@ export async function* engine<W extends Workspace = Workspace>(
 
         consecutiveIncomplete = 0
 
-        for (const msg of response.messages) {
-          await sendAssistantResponse(msg)
-        }
+        await send(messages)
 
-        if (pendingToolCalls.length === 0) {
+        if (pendingCalls.length === 0) {
           let override: string | void = undefined
           if (hooks?.postStep) {
             override = await hooks.postStep(step)
@@ -574,8 +572,8 @@ export async function* engine<W extends Workspace = Workspace>(
 
         const approvals = new Map<number, boolean>()
         if (hooks?.approve) {
-          for (let i = 0; i < pendingToolCalls.length; i++) {
-            const tc = pendingToolCalls[i]!
+          for (let i = 0; i < pendingCalls.length; i++) {
+            const tc = pendingCalls[i]!
             const call: ToolCall = {
               toolUseId: tc.toolCallId,
               name: tc.name,
@@ -586,7 +584,7 @@ export async function* engine<W extends Workspace = Workspace>(
         }
 
         const { resultParts, estimatedTokens } = yield* executeToolCalls(
-          pendingToolCalls,
+          pendingCalls,
           toolkitRuntime,
           step,
           turn,
@@ -598,10 +596,9 @@ export async function* engine<W extends Workspace = Workspace>(
           truncation?.maxInline,
         )
 
-        // Pairs were already journaled inside executeToolCalls; this
-        // batched message only keeps in-memory history in shape.
-        const toolResultMsg: Message = { parts: resultParts }
-        await send(toolResultMsg, false)
+        const pairs: Message[] = zip(pendingCalls, resultParts).map(
+          ([call, result]) => ({ parts: [call, result] }),
+        )
 
         const nextTurnInput =
           (response.usage?.inputTokens ?? 0) +
@@ -612,7 +609,7 @@ export async function* engine<W extends Workspace = Workspace>(
           yield* finalizeStep()
           const outcome = yield* attemptCompaction({
             kind: "preemptive",
-            buffered: [toolResultMsg],
+            buffered: pairs,
           })
           if (outcome === "fatal") {
             settleReason = "compaction_failed"
@@ -621,6 +618,7 @@ export async function* engine<W extends Workspace = Workspace>(
           continue
         }
 
+        append(pairs)
         yield* finalizeStep()
       } catch (e) {
         step.stopReason = StopReason.Unknown

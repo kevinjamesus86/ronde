@@ -64,7 +64,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
     expect(partRole(lastPart)).toBe(Role.User)
   })
 
-  it("drops oldest history items when the compaction request overflows context", async () => {
+  it("shrinks the compaction request and retries when it overflows context", async () => {
     const backend = mockBackend([
       new CompletionError(
         CompletionErrorKind.ContextLengthExceeded,
@@ -87,7 +87,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
     )
   })
 
-  it("drops tool call and tool result pairs together during compaction trimming", async () => {
+  it("buffers popped messages into deferred so they survive compaction retry", async () => {
     const backend = mockBackend([
       new CompletionError(
         CompletionErrorKind.ContextLengthExceeded,
@@ -101,7 +101,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
     ])
     const strategy = new DefaultCompactionStrategy()
 
-    await strategy.compact({
+    const result = await strategy.compact({
       backend,
       model: "mock",
       history: [
@@ -114,10 +114,6 @@ describe("@ronde DefaultCompactionStrategy", () => {
               name: "search",
               arguments: { q: "x" },
             },
-          ],
-        },
-        {
-          parts: [
             {
               type: MessageType.ToolResult,
               toolCallId: "call_1",
@@ -131,17 +127,13 @@ describe("@ronde DefaultCompactionStrategy", () => {
       maxOutput: 1000,
     })
 
-    const retriedHistory = backend.requests[2]!.messages
-    expect(
-      retriedHistory.some((message) =>
-        message.parts.some((part) => part.type === MessageType.ToolUse),
-      ),
-    ).toBe(false)
-    expect(
-      retriedHistory.some((message) =>
-        message.parts.some((part) => part.type === MessageType.ToolResult),
-      ),
-    ).toBe(false)
+    expect(result.kind).toBe("compacted")
+    if (result.kind !== "compacted") {
+      return
+    }
+    expect(result.deferred).toHaveLength(2)
+    expect(result.deferred[0]!.parts[0]!.type).toBe(MessageType.ToolUse)
+    expect(result.deferred[1]!.parts[0]!.type).toBe(MessageType.Text)
   })
 
   it("returns not_compacted when the compacted response has no assistant text", async () => {

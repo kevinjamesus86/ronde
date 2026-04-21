@@ -5,19 +5,30 @@ import {
   textPart,
   userMessage,
   type Message,
+  type MessagePart,
   type ToolCallPart,
 } from "@ronde/core/message"
 
-export function extractToolCalls(messages: Message[]): ToolCallPart[] {
-  const calls: ToolCallPart[] = []
-  for (const msg of messages) {
+export function splitResponse(response: Message[]): {
+  messages: Message[]
+  pendingCalls: ToolCallPart[]
+} {
+  const messages: Message[] = []
+  const pendingCalls: ToolCallPart[] = []
+  for (const msg of response) {
+    const parts: MessagePart[] = []
     for (const part of msg.parts) {
       if (part.type === MessageType.ToolUse) {
-        calls.push(part)
+        pendingCalls.push(part)
+      } else {
+        parts.push(part)
       }
     }
+    if (parts.length > 0) {
+      messages.push({ ...msg, parts })
+    }
   }
-  return calls
+  return { messages, pendingCalls }
 }
 
 function replayTextMessage(role: Role, content: string): Message {

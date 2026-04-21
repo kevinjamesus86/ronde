@@ -308,6 +308,7 @@ describe("@ronde/engine commit boundaries", () => {
                   },
                 ],
               },
+              deferred: [],
               usage: response.usage,
             }
           },
@@ -371,6 +372,7 @@ describe("@ronde/engine commit boundaries", () => {
                   },
                 ],
               },
+              deferred: [],
               usage: response.usage,
             }
           },
