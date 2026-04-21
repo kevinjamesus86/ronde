@@ -235,6 +235,27 @@ describe("@ronde agentic result shaping", () => {
 
     expect(result.output).toBeUndefined()
   })
+
+  // The repair turn ran — it hit the backend, cost tokens, produced a step.
+  // The returned AgenticResult must reflect that reality even when the
+  // repaired parse also fails. Dropping the retry state hides work that
+  // actually happened from callers who inspect usage/steps/history.
+  it("merges retry-pass steps, usage, and history when schema repair fails", async () => {
+    const backend = mockBackend([
+      textResponse("bad", { inputTokens: 10, outputTokens: 5 }),
+      textResponse("still bad", { inputTokens: 20, outputTokens: 7 }),
+    ])
+
+    const result = await agentic(backend, {
+      prompt: "structured",
+      schema: z.object({ ok: z.boolean() }),
+    })
+
+    expect(result.output).toBeUndefined()
+    expect(backend.requests).toHaveLength(2)
+    expect(result.steps).toHaveLength(2)
+    expect(result.usage).toEqual({ input: 30, output: 12, cached: 0 })
+  })
 })
 
 describe("@ronde streaming and observer dispatch", () => {

@@ -424,24 +424,21 @@ export async function agentic<W extends Workspace = Workspace>(
       config.observers,
     )
 
-    const retryText = retryResult.steps.at(-1)?.text
-    const second = tryParseSchema(retryText, config.schema)
-    if (second.ok) {
-      return buildResult(second.data, {
-        ...result,
-        steps: [...result.steps, ...retryResult.steps],
-        history: retryResult.history,
-        settleReason: retryResult.settleReason,
-        totalInputTokens:
-          result.totalInputTokens + retryResult.totalInputTokens,
-        totalOutputTokens:
-          result.totalOutputTokens + retryResult.totalOutputTokens,
-        totalCachedTokens:
-          result.totalCachedTokens + retryResult.totalCachedTokens,
-      })
+    const merged = {
+      ...result,
+      steps: [...result.steps, ...retryResult.steps],
+      history: retryResult.history,
+      settleReason: retryResult.settleReason,
+      totalInputTokens: result.totalInputTokens + retryResult.totalInputTokens,
+      totalOutputTokens:
+        result.totalOutputTokens + retryResult.totalOutputTokens,
+      totalCachedTokens:
+        result.totalCachedTokens + retryResult.totalCachedTokens,
     }
 
-    return buildResult(undefined, result)
+    const retryText = retryResult.steps.at(-1)?.text
+    const second = tryParseSchema(retryText, config.schema)
+    return buildResult(second.ok ? second.data : undefined, merged)
   }
 
   return buildResult(lastText, result)
