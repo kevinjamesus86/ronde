@@ -1,6 +1,6 @@
 {
   "name": "@ronde/mem",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
@@ -17,6 +17,6 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@ronde/core": "0.5.0"
+    "@ronde/core": "0.6.0"
   }
 }
