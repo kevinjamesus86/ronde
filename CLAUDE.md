@@ -36,18 +36,18 @@ Keep both documents accurate; they are the authoritative source for how the pack
 
 Which packages run where. Platform-agnostic packages must not import `node:*`, reference `Buffer`, or touch `process`/`fs`/`os`/`path` — they rely on web globals (`TextEncoder`, `globalThis.crypto`) that exist in Node 19+, browsers, Deno, and workers alike.
 
-| Package            | Node 19+ | Browser | Deno / Workers | Notes                                                                                 |
-| ------------------ | :------: | :-----: | :------------: | ------------------------------------------------------------------------------------- |
-| `@ronde/core`      |    ✓     |    ✓    |       ✓        | platform-agnostic — no Node-isms                                                      |
-| `@ronde/engine`    |    ✓     |    ✓    |       ✓        | platform-agnostic                                                                     |
-| `@ronde/backend`   |    ✓     |    ✓    |       ✓        | platform-agnostic                                                                     |
-| `@ronde/mem`       |    ✓     |    ✓    |       ✓        | platform-agnostic                                                                     |
-| `@ronde/ai-sdk`    |    ✓     |    ✓    |       ✓        | peer dep `@ai-sdk/provider`                                                           |
-| `@ronde/providers` |    ✓     |    ✓    |     ✓ / ?      | browser-safe for OpenAI + Anthropic + Gemini (auto-enabled); llamacpp inherits OpenAI |
-| `@ronde/tools`     |    ✓     |    ✗    |       ✗        | first-party tools use `node:fs`, `node:child_process`                                 |
-| `@ronde/fs`        |    ✓     |    ✗    |       ✗        | concrete fs runtime — `node:fs`, `node:path`                                          |
-| `@ronde/lock`      |    ✓     |    ✗    |       ✗        | native addon (darwin-arm64, linux-x64-gnu)                                            |
-| `ronde` (root)     |    ✓     |    ✗    |       ✗        | bundles `@ronde/fs` + `@ronde/tools` for the managed default                          |
+| Package            | Node 19+ | Browser | Deno / Workers | Notes                                                                                                                                                                         |
+| ------------------ | :------: | :-----: | :------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@ronde/core`      |    ✓     |    ✓    |       ✓        | platform-agnostic — no Node-isms                                                                                                                                              |
+| `@ronde/engine`    |    ✓     |    ✓    |       ✓        | platform-agnostic                                                                                                                                                             |
+| `@ronde/backend`   |    ✓     |    ✓    |       ✓        | platform-agnostic                                                                                                                                                             |
+| `@ronde/mem`       |    ✓     |    ✓    |       ✓        | platform-agnostic                                                                                                                                                             |
+| `@ronde/ai-sdk`    |    ✓     |    ✓    |       ✓        | peer dep `@ai-sdk/provider`                                                                                                                                                   |
+| `@ronde/providers` |    ✓     |    ✓    |     ✓ / ?      | browser-safe for OpenAI + Anthropic + Gemini (auto-enabled); llamacpp inherits OpenAI. Non-Node runtimes must pass `apiKey` explicitly — env-var fallback needs `process.env` |
+| `@ronde/tools`     |    ✓     |    ✗    |       ✗        | first-party tools use `node:fs`, `node:child_process`                                                                                                                         |
+| `@ronde/fs`        |    ✓     |    ✗    |       ✗        | concrete fs runtime — `node:fs`, `node:path`                                                                                                                                  |
+| `@ronde/lock`      |    ✓     |    ✗    |       ✗        | native addon (darwin-arm64, linux-x64-gnu)                                                                                                                                    |
+| `ronde` (root)     |    ✓     |    ✗    |       ✗        | bundles `@ronde/fs` + `@ronde/tools` for the managed default                                                                                                                  |
 
 When editing a platform-agnostic package, grep for the banned patterns before committing:
 

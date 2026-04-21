@@ -149,6 +149,91 @@ describe("@ronde/providers createBackend", () => {
     expect(anthropic.config.model).toBe("claude-sonnet-4-6")
   })
 
+  it("throws the missing-env-var message in a browser-like env instead of a reference error", () => {
+    const name = `test-${Date.now()}-browser`
+    const envKey = `RONDE_TEST_BROWSER_${Date.now()}`
+
+    registerProvider({
+      name,
+      defaultURL: "https://default.test",
+      envVar: envKey,
+      create: () => ({
+        specVersion: "v1" as const,
+        complete: async () => {
+          throw new Error("stop")
+        },
+      }),
+    })
+
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "process",
+    )
+    try {
+      Object.defineProperty(globalThis, "process", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      })
+
+      expect(() =>
+        createBackend({
+          provider: name,
+          model: "model",
+        }),
+      ).toThrow(new RegExp(`Missing ${envKey}`))
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(globalThis, "process", originalDescriptor)
+      }
+    }
+  })
+
+  it("accepts an explicit apiKey when process is undefined", () => {
+    const name = `test-${Date.now()}-browser-key`
+    const create = vi.fn(() => ({
+      specVersion: "v1" as const,
+      complete: async () => {
+        throw new Error("stop")
+      },
+    }))
+
+    registerProvider({
+      name,
+      defaultURL: "https://default.test",
+      envVar: "UNSET_KEY",
+      create,
+    })
+
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "process",
+    )
+    try {
+      Object.defineProperty(globalThis, "process", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      })
+
+      createBackend({
+        provider: name,
+        model: "model",
+        apiKey: "explicit-secret",
+      })
+
+      expect(create).toHaveBeenCalledWith({
+        nativeOpenAI: false,
+        apiKey: "explicit-secret",
+        baseURL: "https://default.test",
+      })
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(globalThis, "process", originalDescriptor)
+      }
+    }
+  })
+
   it("returns a configured backend that delegates complete() to the provider backend", async () => {
     const response = {
       messages: [],

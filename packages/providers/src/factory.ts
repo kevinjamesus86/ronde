@@ -37,8 +37,10 @@ export function createBackend(config: BackendConfig): ConfiguredBackend {
 }
 
 // Explicit `apiKey` wins. Otherwise fall back to the provider's
-// declared env var. `envVar === null` means a local provider (e.g.
-// llamacpp) with no key requirement.
+// declared env var when a Node-like `process.env` is available.
+// `envVar === null` means a local provider (e.g. llamacpp) with no
+// key requirement. In browsers and other runtimes without `process`,
+// callers must pass `apiKey` explicitly.
 function resolveApiKey(config: BackendConfig, envVar: string | null): string {
   if (config.apiKey) {
     return config.apiKey
@@ -46,7 +48,8 @@ function resolveApiKey(config: BackendConfig, envVar: string | null): string {
   if (envVar === null) {
     return ""
   }
-  const fromEnv = process.env[envVar]
+  const fromEnv =
+    typeof process !== "undefined" ? process.env?.[envVar] : undefined
   if (fromEnv) {
     return fromEnv
   }
