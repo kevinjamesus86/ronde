@@ -6,7 +6,7 @@ import { pathContextForWorkspace } from "./workspace-path.js"
 import type { GlobData } from "./types.js"
 import { fsTool } from "./fs-tool.js"
 
-const MAX_RESULTS = 500
+const HARD_LIMIT = 10_000
 
 type GlobArgs = z.infer<typeof parameters>
 
@@ -22,15 +22,12 @@ const parameters = z.object({
 })
 
 /**
- * Find files by glob pattern. Capped at {@link MAX_RESULTS} matches;
- * `.gitignore` is respected by default.
+ * Find files by glob pattern. Respects `.gitignore` by default.
  */
 export const globFiles = (pathCtx: PathContext, opts: GlobOptions = {}) =>
   fsTool({
     name: "glob_files",
-    description:
-      "Find files by glob pattern. Respects .gitignore by default." +
-      ` Returns up to ${MAX_RESULTS} matches.`,
+    description: "Find files by glob pattern. Respects .gitignore by default.",
     parameters,
     execute: (args, ctx) =>
       run(pathContextForWorkspace(pathCtx, ctx.workspace), opts, args),
@@ -49,13 +46,11 @@ async function run(pathCtx: PathContext, opts: GlobOptions, args: GlobArgs) {
     gitignore: opts.gitignore,
   })
 
-  const truncated = matches.length > MAX_RESULTS
-  const results = truncated ? matches.slice(0, MAX_RESULTS) : matches
+  const capped = matches.slice(0, HARD_LIMIT)
 
   return ok<GlobData>({
-    matches: results,
+    matches: capped,
     totalMatches: matches.length,
-    truncated,
   })
 }
 
@@ -63,11 +58,7 @@ function format(data: GlobData): string {
   if (data.matches.length === 0) {
     return "No matches."
   }
-  let out = groupByDir(data.matches)
-  if (data.truncated) {
-    out += `\n\n(${data.totalMatches} total — showing first ${MAX_RESULTS})`
-  }
-  return out
+  return groupByDir(data.matches)
 }
 
 function groupByDir(paths: string[]): string {

@@ -30,7 +30,6 @@ describe("@ronde/tools glob_files", () => {
       data: {
         matches: ["a.ts", "src/c.ts"],
         totalMatches: 2,
-        truncated: false,
       },
     })
   })
@@ -57,7 +56,6 @@ describe("@ronde/tools glob_files", () => {
       data: {
         matches: ["kept.ts"],
         totalMatches: 1,
-        truncated: false,
       },
     })
   })
@@ -84,7 +82,6 @@ describe("@ronde/tools glob_files", () => {
       data: {
         matches: ["ignored.ts", "kept.ts"],
         totalMatches: 2,
-        truncated: false,
       },
     })
   })

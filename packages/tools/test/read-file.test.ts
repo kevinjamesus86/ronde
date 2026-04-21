@@ -52,7 +52,28 @@ describe("@ronde/tools read_file", () => {
       expect(result.data.content).toBe("b\nc")
       expect(result.data.startLine).toBe(2)
       expect(result.data.endLine).toBe(3)
-      expect(result.data.truncated).toBe(true)
+      expect(result.data.totalLines).toBe(4)
+    }
+  })
+
+  it("renders content verbatim as the file contains it", async () => {
+    const root = tmp.dir()
+    tmp.write(root, { "file.txt": "alpha\nbeta\ngamma" })
+    const toolkit = readFile(new PathContext([root]))
+    const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
+
+    const result = await execTool<ReadFileData>(
+      toolkit,
+      "read_file",
+      { file_path: path.join(root, "file.txt") },
+      workspace,
+    )
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(toolkit.formatters.read_file?.(result.data)).toBe(
+        "alpha\nbeta\ngamma",
+      )
     }
   })
 

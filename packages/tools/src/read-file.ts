@@ -38,8 +38,8 @@ export const readFile = (pathCtx: PathContext) =>
     name: "read_file",
     description:
       "Read a file's contents. Returns up to `limit` lines (default 2000)" +
-      " starting at `offset` (default 1, 1-indexed). Output is formatted" +
-      " with line numbers.",
+      " starting at `offset` (default 1, 1-indexed). Individual lines over" +
+      ` ${MAX_LINE_CHARS} chars are truncated with a \`[line truncated]\` marker.`,
     parameters,
     execute: (args, ctx) =>
       read(pathContextForWorkspace(pathCtx, ctx.workspace), args),
@@ -79,7 +79,6 @@ async function read(pathCtx: PathContext, args: ReadArgs) {
       totalLines,
       startLine: offset,
       endLine: offset - 1,
-      truncated: true,
     })
   }
 
@@ -92,7 +91,6 @@ async function read(pathCtx: PathContext, args: ReadArgs) {
         ? line.slice(0, MAX_LINE_CHARS) + "… [line truncated]"
         : line,
     )
-  const truncated = endLine < totalLines || offset > 1
 
   return ok<ReadFileData>({
     path: check.path,
@@ -100,7 +98,6 @@ async function read(pathCtx: PathContext, args: ReadArgs) {
     totalLines,
     startLine,
     endLine,
-    truncated,
   })
 }
 
@@ -114,16 +111,5 @@ function format(data: ReadFileData): string {
       ` Use a smaller offset to read.)`
     )
   }
-  const width = String(data.endLine).length
-  const lines = data.content.split("\n").map((line, i) => {
-    const n = String(data.startLine + i).padStart(width, " ")
-    return `${n}→${line}`
-  })
-  let out = lines.join("\n")
-  if (data.truncated) {
-    out +=
-      `\n\n[Showing lines ${data.startLine}-${data.endLine} of ${data.totalLines}.` +
-      ` Use offset/limit to read other ranges.]`
-  }
-  return out
+  return data.content
 }

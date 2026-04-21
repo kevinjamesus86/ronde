@@ -289,6 +289,13 @@ export interface AgenticConfig<W extends Workspace = Workspace> {
   resume?: string | ManagedRuntimeOptions
   journal?: Journal
   workspace?: W
+  /**
+   * Framework truncation policy for tool-result rendering. Oversized
+   * formatted output spills to the workspace and is replaced with a
+   * sliced preview plus a neutral hint. See `truncate` on tool
+   * definitions for per-tool slice strategy.
+   */
+  truncation?: { maxInline?: number }
 }
 
 /** Configuration for `agenticStream()`. Stream consumers receive `EngineEvent` directly, so `observers` is not accepted. */
@@ -380,6 +387,7 @@ export async function agentic<W extends Workspace = Workspace>(
       signal: config.signal,
       hooks: config.hooks,
       compaction: resolveCompaction(config.compaction),
+      truncation: config.truncation,
       journal: prepared.journal,
       workspace: prepared.workspace,
     } as EngineConfig<W>,
@@ -409,6 +417,7 @@ export async function agentic<W extends Workspace = Workspace>(
         signal: config.signal,
         hooks: config.hooks,
         compaction: resolveCompaction(config.compaction),
+        truncation: config.truncation,
         journal: prepared.journal,
         workspace: prepared.workspace,
       } as EngineConfig<W>,
@@ -567,6 +576,7 @@ export async function* agenticStream(
     signal: config.signal,
     hooks: config.hooks,
     compaction: resolveCompaction(config.compaction),
+    truncation: config.truncation,
     journal: prepared.journal,
     workspace: prepared.workspace,
   })

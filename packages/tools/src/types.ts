@@ -7,8 +7,6 @@ export interface ReadFileData {
   startLine: number
   /** 1-indexed, inclusive. */
   endLine: number
-  /** True when the returned window doesn't cover the whole file. */
-  truncated: boolean
 }
 
 export interface WriteFileData {
@@ -23,7 +21,6 @@ export interface EditFileData {
 export interface GlobData {
   matches: string[]
   totalMatches: number
-  truncated: boolean
 }
 
 export interface GrepMatch {
@@ -48,7 +45,6 @@ export interface ListDirectoryEntry {
 export interface ListDirectoryData {
   path: string
   entries: ListDirectoryEntry[]
-  truncated: boolean
 }
 
 export interface ShellData {

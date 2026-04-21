@@ -8,7 +8,7 @@ import { pathContextForWorkspace } from "./workspace-path.js"
 import type { ListDirectoryData, ListDirectoryEntry } from "./types.js"
 import { fsTool } from "./fs-tool.js"
 
-const MAX_ENTRIES = 500
+const HARD_LIMIT = 10_000
 
 type ListArgs = z.infer<typeof parameters>
 
@@ -28,8 +28,7 @@ const parameters = z.object({
 
 /**
  * List a directory as a tree. `depth: 1` is a flat listing; up to
- * `depth: 5` for project overviews. Capped at {@link MAX_ENTRIES}.
- * Respects `.gitignore` by default.
+ * `depth: 5` for project overviews. Respects `.gitignore` by default.
  */
 export const listDirectory = (pathCtx: PathContext, opts: ListOptions = {}) =>
   fsTool({
@@ -37,7 +36,7 @@ export const listDirectory = (pathCtx: PathContext, opts: ListOptions = {}) =>
     description:
       "List files and directories as a tree." +
       " Depth 1 = flat listing, up to 5 for project structure." +
-      ` Respects .gitignore. Max ${MAX_ENTRIES} entries.`,
+      " Respects .gitignore.",
     parameters,
     execute: (args, ctx) =>
       list(pathContextForWorkspace(pathCtx, ctx.workspace), opts, args),
@@ -60,11 +59,10 @@ async function list(pathCtx: PathContext, opts: ListOptions, args: ListArgs) {
     gitignore: opts.gitignore,
   })
 
-  const truncated = paths.length > MAX_ENTRIES
-  const visible = truncated ? paths.slice(0, MAX_ENTRIES) : paths
+  const capped = paths.slice(0, HARD_LIMIT)
 
   const entries: ListDirectoryEntry[] = await Promise.all(
-    visible.map(async (rel) => {
+    capped.map(async (rel) => {
       const isDir = rel.endsWith("/")
       const name = isDir ? rel.slice(0, -1) : rel
       if (isDir) {
@@ -79,32 +77,25 @@ async function list(pathCtx: PathContext, opts: ListOptions, args: ListArgs) {
     }),
   )
 
-  return ok<ListDirectoryData>({
-    path: base,
-    entries,
-    truncated,
-  })
+  return ok<ListDirectoryData>({ path: base, entries })
 }
 
 function format(data: ListDirectoryData): string {
   if (data.entries.length === 0) {
     return "Empty directory."
   }
-  const lines = data.entries.map((e) => {
-    const depth = e.name.split("/").length - 1
-    const indent = "  ".repeat(depth)
-    const base = e.name.split("/").pop()!
-    if (e.type === "directory") {
-      return `${indent}${base}/`
-    }
-    const size = e.sizeBytes != null ? ` (${formatSize(e.sizeBytes)})` : ""
-    return `${indent}${base}${size}`
-  })
-  let out = lines.join("\n")
-  if (data.truncated) {
-    out += `\n\n(truncated — ${MAX_ENTRIES} entries shown)`
-  }
-  return out
+  return data.entries
+    .map((e) => {
+      const depth = e.name.split("/").length - 1
+      const indent = "  ".repeat(depth)
+      const base = e.name.split("/").pop()!
+      if (e.type === "directory") {
+        return `${indent}${base}/`
+      }
+      const size = e.sizeBytes != null ? ` (${formatSize(e.sizeBytes)})` : ""
+      return `${indent}${base}${size}`
+    })
+    .join("\n")
 }
 
 function formatSize(bytes: number): string {
