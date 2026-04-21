@@ -5,8 +5,8 @@ import { z } from "zod/v4"
 import { CompletionError, CompletionErrorKind } from "@ronde/core/completion"
 import { userMessage } from "@ronde/core/message"
 import { registerProvider, type ProviderDescriptor } from "@ronde/providers"
-import { agentic, agenticStream, hydrate } from "../src/index.js"
-import { createManagedRuntime } from "../src/managed-runtime.js"
+import { agentic, agenticStream, generate, hydrate } from "../src/index.js"
+import { createManagedRuntime } from "../src/managed.js"
 import type { RunObserver } from "../src/observer.js"
 import {
   mockBackend,
@@ -236,6 +236,55 @@ describe("@ronde agentic result shaping", () => {
     expect(result.output).toBeUndefined()
   })
 
+  it("infers output type from schema across agentic, generate, and agenticStream", async () => {
+    const schema = z.object({ name: z.string() })
+
+    const r1 = await agentic(mockBackend([textResponse('{"name":"Ada"}')]), {
+      prompt: "p",
+      schema,
+    })
+    void (r1.output satisfies { name: string } | undefined)
+
+    const r2 = await generate(mockBackend([textResponse('{"name":"Bob"}')]), {
+      prompt: "p",
+      schema,
+    })
+    void (r2.output satisfies { name: string } | undefined)
+
+    const gen = agenticStream(mockBackend([textResponse('{"name":"Cat"}')]), {
+      prompt: "p",
+      schema,
+    })
+    let next = await gen.next()
+    while (!next.done) {
+      next = await gen.next()
+    }
+    void (next.value.output satisfies { name: string } | undefined)
+
+    expect(r1.output).toEqual({ name: "Ada" })
+    expect(r2.output).toEqual({ name: "Bob" })
+    expect(next.value.output).toEqual({ name: "Cat" })
+  })
+
+  it("infers string as output when schema is omitted", async () => {
+    const r1 = await agentic(mockBackend([textResponse("a")]), { prompt: "p" })
+    void (r1.output satisfies string | undefined)
+
+    const r2 = await generate(mockBackend([textResponse("b")]), { prompt: "p" })
+    void (r2.output satisfies string | undefined)
+
+    const gen = agenticStream(mockBackend([textResponse("c")]), { prompt: "p" })
+    let next = await gen.next()
+    while (!next.done) {
+      next = await gen.next()
+    }
+    void (next.value.output satisfies string | undefined)
+
+    expect(r1.output).toBe("a")
+    expect(r2.output).toBe("b")
+    expect(next.value.output).toBe("c")
+  })
+
   // The repair turn ran — it hit the backend, cost tokens, produced a step.
   // The returned AgenticResult must reflect that reality even when the
   // repaired parse also fails. Dropping the retry state hides work that
@@ -286,6 +335,72 @@ describe("@ronde streaming and observer dispatch", () => {
       } as never)) {
       }
     }).rejects.toThrow(/does not accept "observers"/i)
+  })
+
+  it("returns parsed schema output from agenticStream when the first pass validates", async () => {
+    const backend = mockBackend([textResponse('{"name":"Ada"}')])
+    const gen = agenticStream(backend, {
+      prompt: "person",
+      schema: z.object({ name: z.string() }),
+    })
+
+    let next = await gen.next()
+    while (!next.done) {
+      next = await gen.next()
+    }
+
+    expect(next.value.output).toEqual({ name: "Ada" })
+    expect(backend.requests).toHaveLength(1)
+    expect(backend.requests[0]!.system).toContain("valid JSON")
+  })
+
+  it("runs a schema repair pass in agenticStream and yields its events too", async () => {
+    const backend = mockBackend([
+      textResponse("not json"),
+      textResponse('{"ok":true}'),
+    ])
+
+    const gen = agenticStream(backend, {
+      prompt: "structured",
+      schema: z.object({ ok: z.boolean() }),
+    })
+
+    const runEnds: unknown[] = []
+    let next = await gen.next()
+    while (!next.done) {
+      if (next.value.type === "run_end") {
+        runEnds.push(next.value)
+      }
+      next = await gen.next()
+    }
+
+    expect(next.value.output).toEqual({ ok: true })
+    expect(next.value.steps).toHaveLength(2)
+    expect(backend.requests).toHaveLength(2)
+    // Each engine run emits its own run_end — the retry is a real run.
+    expect(runEnds).toHaveLength(2)
+  })
+
+  it("merges retry state in agenticStream when both parses fail", async () => {
+    const backend = mockBackend([
+      textResponse("bad", { inputTokens: 10, outputTokens: 5 }),
+      textResponse("still bad", { inputTokens: 20, outputTokens: 7 }),
+    ])
+
+    const gen = agenticStream(backend, {
+      prompt: "structured",
+      schema: z.object({ ok: z.boolean() }),
+    })
+
+    let next = await gen.next()
+    while (!next.done) {
+      next = await gen.next()
+    }
+
+    expect(next.value.output).toBeUndefined()
+    expect(next.value.steps).toHaveLength(2)
+    expect(next.value.usage).toEqual({ input: 30, output: 12, cached: 0 })
+    expect(backend.requests).toHaveLength(2)
   })
 
   it("dispatches engine events onto RunObserver callbacks", async () => {

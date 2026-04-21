@@ -32,6 +32,5 @@ export * from "@ronde/mem"
 // Product layer — things that only exist in the convenience package.
 export * from "./api.js"
 export * from "./compaction.js"
-export * from "./default-runtime.js"
-export * from "./managed-runtime.js"
+export * from "./managed.js"
 export type { RunObserver } from "./observer.js"

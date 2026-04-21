@@ -66,10 +66,9 @@ function isAnthropicMeta(meta: unknown): meta is AnthropicMeta {
 const ANTHROPIC_VERSION = "2023-06-01"
 
 function anthropicMeta(signature?: string): AnthropicMeta | undefined {
-  if (!signature) {
-    return undefined
+  if (signature) {
+    return { provider: "anthropic", signature }
   }
-  return { provider: "anthropic", signature }
 }
 
 function anthropicRole(role: Role): "assistant" | "user" {

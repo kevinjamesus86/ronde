@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import path from "node:path"
 import { isDirectoryWorkspace } from "@ronde/core/workspace"
-import { createRuntime } from "../src/default-runtime.js"
+import { createRuntime } from "../src/managed.js"
 import { useTmp, withEnv } from "./support.js"
 
 const tmp = useTmp()

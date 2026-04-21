@@ -21,7 +21,6 @@
 import { z } from "zod/v4"
 import { ok, err, type Result } from "@ronde/core/result"
 import { withRetry } from "@ronde/backend"
-import { engine } from "@ronde/engine"
 import type {
   EngineResult,
   AgentStep,
@@ -33,222 +32,20 @@ import type {
 } from "@ronde/engine"
 import { createBackend, allProviders } from "@ronde/providers"
 import { DefaultCompactionStrategy } from "./compaction.js"
-import { createRuntime } from "./default-runtime.js"
-import { openRuntime, type ManagedRuntimeOptions } from "./managed-runtime.js"
+import { run, stream } from "./engine.js"
+import { openRuntime, type ManagedRuntimeOptions } from "./managed.js"
 import type { RunObserver } from "./observer.js"
+import * as runtime from "./runtime.js"
 import type { ConfiguredBackend, Effort } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
 import type { Message } from "@ronde/core/message"
 import type { Toolkit } from "@ronde/core/toolkit"
-import { Journal, JournalEvent } from "@ronde/core/journal"
+import { Journal } from "@ronde/core/journal"
 import type { Workspace } from "@ronde/core/workspace"
 import type { Runtime } from "@ronde/core/runtime"
 import type { FsRuntime } from "@ronde/fs"
 
-function parseModelString(model: string): {
-  provider: string
-  model: string
-} {
-  const slash = model.indexOf("/")
-  if (slash === -1) {
-    throw new Error(
-      `Invalid model format: "${model}". ` +
-        `Expected "provider/model" ` +
-        `(e.g. "anthropic/claude-haiku-4-5").`,
-    )
-  }
-  const prefix = model.slice(0, slash)
-  const modelName = model.slice(slash + 1)
-
-  for (const desc of allProviders()) {
-    const p = desc.modelPrefix ?? desc.name
-    if (p === prefix) {
-      return { provider: desc.name, model: modelName }
-    }
-  }
-
-  const known = [...allProviders()].map((d) => d.modelPrefix ?? d.name)
-  throw new Error(
-    `Unknown provider "${prefix}". ` + `Known providers: ${known.join(", ")}.`,
-  )
-}
-
-function buildBackend(modelStr: string): ConfiguredBackend {
-  const { provider, model } = parseModelString(modelStr)
-  return withRetry(
-    createBackend({
-      provider,
-      model,
-    }),
-  )
-}
-
-const emptyToolkit: Toolkit = {
-  execute: async (name) => err(`Tool "${name}" not found`),
-  schemas: [],
-  formatters: {},
-}
-
-function resolveCompaction(
-  value: CompactionStrategy | false | undefined,
-): CompactionStrategy | undefined {
-  if (value === false) {
-    return undefined
-  }
-  return value ?? new DefaultCompactionStrategy()
-}
-
-function buildSchemaInstruction(schema: z.ZodType): string {
-  const jsonSchema = z.toJSONSchema(schema, { unrepresentable: "any" })
-  return (
-    "\n\nRespond with valid JSON matching this schema " +
-    "(no markdown, no code fences, just raw JSON):\n" +
-    JSON.stringify(jsonSchema, null, 2)
-  )
-}
-
-function tryParseSchema<T>(
-  text: string | undefined,
-  schema: z.ZodType<T>,
-): Result<T> {
-  if (!text) {
-    return err("No text output to parse")
-  }
-  let json = text.trim()
-  if (json.startsWith("```")) {
-    json = json.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "")
-  }
-  try {
-    const parsed = JSON.parse(json)
-    const result = schema.safeParse(parsed)
-    if (result.success) {
-      return ok(result.data)
-    }
-    return err(result.error.message)
-  } catch (e) {
-    return err(`Invalid JSON: ${(e as Error).message}`)
-  }
-}
-
-/** Return the generator so its finally block runs even if the consumer aborts mid-iteration. */
-async function finalizeEngine(
-  gen: AsyncGenerator<EngineEvent, EngineResult, unknown>,
-): Promise<void> {
-  await gen.return(undefined as never)
-}
-
-function notify(observers: RunObserver[], fn: (o: RunObserver) => void): void {
-  for (const observer of observers) {
-    try {
-      fn(observer)
-    } catch {
-      // Observer errors must not break the loop.
-    }
-  }
-}
-
-function dispatchEngineEvent(
-  event: EngineEvent,
-  observers: RunObserver[],
-): void {
-  switch (event.type) {
-    case "turn_start":
-      notify(observers, (o) => o.onTurnStart?.(event.turn))
-      break
-
-    case "thinking_delta":
-      notify(observers, (o) => o.onThinkingDelta?.(event.turn, event.content))
-      break
-    case "thinking":
-      notify(observers, (o) => o.onThinking?.(event.turn, event.content))
-      break
-    case "text_delta":
-      notify(observers, (o) => o.onTextDelta?.(event.turn, event.content))
-      break
-    case "text":
-      notify(observers, (o) => o.onText?.(event.turn, event.content))
-      break
-    case "tool_input_delta":
-      notify(observers, (o) =>
-        o.onToolInputDelta?.(event.turn, event.toolCallId, event.chunk),
-      )
-      break
-    case "tool_call":
-      notify(observers, (o) => o.onToolCall?.(event.turn, event.call))
-      break
-    case "tool_delta":
-      notify(observers, (o) =>
-        o.onToolDelta?.(event.turn, event.call, event.chunk),
-      )
-      break
-    case "tool_result":
-      notify(observers, (o) =>
-        o.onToolResult?.(event.turn, event.call, event.result),
-      )
-      break
-
-    case "turn_end":
-      notify(observers, (o) => o.onTurnEnd?.(event.turn, event.step))
-      break
-    case "cutoff":
-      notify(observers, (o) => o.onCutoff?.(event.turn, event.count))
-      break
-
-    case "compaction_start":
-      notify(observers, (o) =>
-        o.onCompactionStart?.(event.turn, event.historyLength),
-      )
-      break
-    case "compaction_end":
-      notify(observers, (o) => o.onCompactionEnd?.(event.turn, event.usage))
-      break
-
-    case "warning":
-      notify(observers, (o) => o.onWarning?.(event.turn, event.message))
-      break
-    case "error":
-      notify(observers, (o) => o.onError?.(event.turn, event.message))
-      break
-
-    case "run_end":
-      notify(observers, (o) => o.onRunEnd?.(event.result))
-      break
-
-    default: {
-      const _: never = event
-    }
-  }
-}
-
-/**
- * Drive the engine, projecting `EngineEvent` onto observer callbacks.
- * Hooks live on the engine config — this wrapper only observes.
- */
-async function run<W extends Workspace = Workspace>(
-  backend: ConfiguredBackend,
-  config: EngineConfig<W>,
-  observerInput: RunObserver | RunObserver[] = [],
-): Promise<EngineResult> {
-  const observers = Array.isArray(observerInput)
-    ? observerInput
-    : [observerInput]
-
-  const gen = engine(backend, config)
-  try {
-    let next = await gen.next()
-    while (!next.done) {
-      dispatchEngineEvent(next.value, observers)
-      next = await gen.next()
-    }
-    return next.value
-  } finally {
-    try {
-      await finalizeEngine(gen)
-    } catch {
-      // Finalization errors must not mask the run result or original throw.
-    }
-  }
-}
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 /** Configuration for `agentic()` and `generate()`. */
 export interface AgenticConfig<W extends Workspace = Workspace> {
@@ -324,149 +121,7 @@ export interface AgenticResult<T = string> {
   }
 }
 
-/**
- * Run an agentic loop. The agent completes turns, calls tools,
- * and returns structured or text output.
- *
- * Convenience mode — model string, env keys, auto-retry:
- * ```
- * await agentic({ model: "anthropic/claude-haiku-4-5", prompt: "...", tools })
- * ```
- *
- * Power mode — bring your own backend:
- * ```
- * await agentic(backend, { prompt: "...", tools })
- * ```
- */
-export async function agentic<
-  S extends z.ZodType,
-  W extends Workspace = Workspace,
->(
-  backendOrConfig: ConfiguredBackend | AgenticConfig<W>,
-  maybeConfig?: AgenticConfig<W>,
-): Promise<AgenticResult<S extends z.ZodType ? z.infer<S> : string>>
-
-export async function agentic<W extends Workspace = Workspace>(
-  backendOrConfig: ConfiguredBackend | AgenticConfig<W>,
-  maybeConfig?: AgenticConfig<W>,
-): Promise<AgenticResult<unknown>> {
-  let backend: ConfiguredBackend
-  let config: AgenticConfig<W>
-
-  if (maybeConfig !== undefined) {
-    backend = backendOrConfig as ConfiguredBackend
-    config = maybeConfig
-  } else {
-    config = backendOrConfig as AgenticConfig<W>
-    if (!config.model) {
-      throw new Error(
-        'Either pass a backend as the first argument, or provide "model" in config.',
-      )
-    }
-    backend = buildBackend(config.model)
-  }
-
-  let system = config.system
-  if (config.schema) {
-    const instruction = buildSchemaInstruction(config.schema)
-    system = system ? system + instruction : instruction
-  }
-
-  const prepared = await prepareRunConfig(config)
-
-  // The engine reads history from the journal; we never hand it a
-  // separate messages list. `prepareRunConfig` ensures the journal
-  // already holds any seeded/resumed history.
-  const result = await run(
-    backend,
-    {
-      system,
-      prompt: config.prompt,
-      toolkit: config.tools ?? (emptyToolkit as Toolkit<W>),
-      maxTurns: config.maxTurns ?? 0,
-      signal: config.signal,
-      hooks: config.hooks,
-      compaction: resolveCompaction(config.compaction),
-      truncation: config.truncation,
-      journal: prepared.journal,
-      workspace: prepared.workspace,
-    } as EngineConfig<W>,
-    config.observers,
-  )
-
-  const lastText = result.steps.at(-1)?.text
-
-  if (config.schema) {
-    const first = tryParseSchema(lastText, config.schema)
-    if (first.ok) {
-      return buildResult(first.data, result)
-    }
-
-    // One retry on the shared journal/workspace — the engine replays
-    // the first pass's history automatically; no messages hand-off.
-    const retryResult = await run(
-      backend,
-      {
-        system,
-        prompt:
-          `Your previous response did not match the required JSON schema. ` +
-          `Error: ${first.error}\n\n` +
-          `Please respond again with valid JSON matching the schema.`,
-        toolkit: config.tools ?? (emptyToolkit as Toolkit<W>),
-        maxTurns: 1,
-        signal: config.signal,
-        hooks: config.hooks,
-        compaction: resolveCompaction(config.compaction),
-        truncation: config.truncation,
-        journal: prepared.journal,
-        workspace: prepared.workspace,
-      } as EngineConfig<W>,
-      config.observers,
-    )
-
-    const merged = {
-      ...result,
-      steps: [...result.steps, ...retryResult.steps],
-      history: retryResult.history,
-      settleReason: retryResult.settleReason,
-      totalInputTokens: result.totalInputTokens + retryResult.totalInputTokens,
-      totalOutputTokens:
-        result.totalOutputTokens + retryResult.totalOutputTokens,
-      totalCachedTokens:
-        result.totalCachedTokens + retryResult.totalCachedTokens,
-    }
-
-    const retryText = retryResult.steps.at(-1)?.text
-    const second = tryParseSchema(retryText, config.schema)
-    return buildResult(second.ok ? second.data : undefined, merged)
-  }
-
-  return buildResult(lastText, result)
-}
-
-function buildResult(
-  output: unknown,
-  raw: {
-    steps: AgentStep[]
-    history: Message[]
-    settleReason: SettleReason
-    totalInputTokens: number
-    totalOutputTokens: number
-    totalCachedTokens: number
-  },
-): AgenticResult<any> {
-  return {
-    output,
-    steps: raw.steps,
-    history: raw.history,
-    settleReason: raw.settleReason,
-    usage: {
-      input: raw.totalInputTokens,
-      output: raw.totalOutputTokens,
-      cached: raw.totalCachedTokens,
-    },
-  }
-}
+// ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
  * Generate a single completion. Equivalent to `agentic()` with
@@ -514,6 +169,117 @@ export async function generate<W extends Workspace = Workspace>(
 }
 
 /**
+ * Run an agentic loop. The agent completes turns, calls tools,
+ * and returns structured or text output.
+ *
+ * Convenience mode — model string, env keys, auto-retry:
+ * ```
+ * await agentic({ model: "anthropic/claude-haiku-4-5", prompt: "...", tools })
+ * ```
+ *
+ * Power mode — bring your own backend:
+ * ```
+ * await agentic(backend, { prompt: "...", tools })
+ * ```
+ */
+export async function agentic<
+  S extends z.ZodType,
+  W extends Workspace = Workspace,
+>(
+  backendOrConfig: ConfiguredBackend | (AgenticConfig<W> & { schema: S }),
+  maybeConfig?: AgenticConfig<W> & { schema: S },
+): Promise<AgenticResult<z.infer<S>>>
+
+export async function agentic<W extends Workspace = Workspace>(
+  backendOrConfig: ConfiguredBackend | AgenticConfig<W>,
+  maybeConfig?: AgenticConfig<W>,
+): Promise<AgenticResult<string>>
+
+export async function agentic<W extends Workspace = Workspace>(
+  backendOrConfig: ConfiguredBackend | AgenticConfig<W>,
+  maybeConfig?: AgenticConfig<W>,
+): Promise<AgenticResult<unknown>> {
+  let backend: ConfiguredBackend
+  let config: AgenticConfig<W>
+
+  if (maybeConfig !== undefined) {
+    backend = backendOrConfig as ConfiguredBackend
+    config = maybeConfig
+  } else {
+    config = backendOrConfig as AgenticConfig<W>
+    if (!config.model) {
+      throw new Error(
+        'Either pass a backend as the first argument, or provide "model" in config.',
+      )
+    }
+    backend = buildBackend(config.model)
+  }
+
+  let system = config.system
+  if (config.schema) {
+    const instruction = buildSchemaInstruction(config.schema)
+    system = system ? system + instruction : instruction
+  }
+
+  const prepared = await runtime.prepare(config)
+
+  // The engine reads history from the journal; we never hand it a
+  // separate messages list. `runtime.prepare` ensures the journal
+  // already holds any seeded/resumed history.
+  const result = await run(
+    backend,
+    {
+      system,
+      prompt: config.prompt,
+      toolkit: config.tools ?? (emptyToolkit as Toolkit<W>),
+      maxTurns: config.maxTurns ?? 0,
+      signal: config.signal,
+      hooks: config.hooks,
+      compaction: resolveCompaction(config.compaction),
+      truncation: config.truncation,
+      journal: prepared.journal,
+      workspace: prepared.workspace,
+    } as EngineConfig<W>,
+    config.observers,
+  )
+
+  const lastText = result.steps.at(-1)?.text
+
+  if (config.schema) {
+    const first = tryParseSchema(lastText, config.schema)
+    if (first.ok) {
+      return buildResult(first.data, result)
+    }
+
+    // One retry on the shared journal/workspace — the engine replays
+    // the first pass's history automatically; no messages hand-off.
+    const retryResult = await run(
+      backend,
+      {
+        system,
+        prompt: repairPrompt(first.error),
+        toolkit: config.tools ?? (emptyToolkit as Toolkit<W>),
+        maxTurns: 1,
+        signal: config.signal,
+        hooks: config.hooks,
+        compaction: resolveCompaction(config.compaction),
+        truncation: config.truncation,
+        journal: prepared.journal,
+        workspace: prepared.workspace,
+      } as EngineConfig<W>,
+      config.observers,
+    )
+
+    const merged = mergeRuns(result, retryResult)
+    const retryText = retryResult.steps.at(-1)?.text
+    const second = tryParseSchema(retryText, config.schema)
+    return buildResult(second.ok ? second.data : undefined, merged)
+  }
+
+  return buildResult(lastText, result)
+}
+
+/**
  * Streaming agentic loop. Yields observation events as they happen.
  * Hooks handle decisions internally. Use `for await` to consume.
  * `observers` are not accepted here — stream consumers already
@@ -526,18 +292,31 @@ export async function generate<W extends Workspace = Workspace>(
  * }
  * ```
  */
-export async function* agenticStream(
-  backendOrConfig: ConfiguredBackend | AgenticStreamConfig,
-  maybeConfig?: AgenticStreamConfig,
-): AsyncGenerator<EngineEvent, AgenticResult<string>> {
+export function agenticStream<
+  S extends z.ZodType,
+  W extends Workspace = Workspace,
+>(
+  backendOrConfig: ConfiguredBackend | (AgenticStreamConfig<W> & { schema: S }),
+  maybeConfig?: AgenticStreamConfig<W> & { schema: S },
+): AsyncGenerator<EngineEvent, AgenticResult<z.infer<S>>>
+
+export function agenticStream<W extends Workspace = Workspace>(
+  backendOrConfig: ConfiguredBackend | AgenticStreamConfig<W>,
+  maybeConfig?: AgenticStreamConfig<W>,
+): AsyncGenerator<EngineEvent, AgenticResult<string>>
+
+export async function* agenticStream<W extends Workspace = Workspace>(
+  backendOrConfig: ConfiguredBackend | AgenticStreamConfig<W>,
+  maybeConfig?: AgenticStreamConfig<W>,
+): AsyncGenerator<EngineEvent, AgenticResult<unknown>> {
   let backend: ConfiguredBackend
-  let config: AgenticStreamConfig
+  let config: AgenticStreamConfig<W>
 
   if (maybeConfig !== undefined) {
     backend = backendOrConfig as ConfiguredBackend
     config = maybeConfig
   } else {
-    config = backendOrConfig as AgenticStreamConfig
+    config = backendOrConfig as AgenticStreamConfig<W>
     if (!config.model) {
       throw new Error(
         'Either pass a backend as the first argument, or provide "model" in config.',
@@ -561,11 +340,10 @@ export async function* agenticStream(
     system = system ? system + instruction : instruction
   }
 
-  const prepared = await prepareRunConfig(config)
-
+  const prepared = await runtime.prepare(config)
   const toolkit = config.tools ?? emptyToolkit
 
-  const gen = engine(backend, {
+  const result = yield* stream(backend, {
     system,
     prompt: config.prompt,
     toolkit,
@@ -578,34 +356,37 @@ export async function* agenticStream(
     workspace: prepared.workspace,
   })
 
-  try {
-    let next = await gen.next()
-    while (!next.done) {
-      yield next.value
-      next = await gen.next()
+  const lastText = result.steps.at(-1)?.text
+
+  if (config.schema) {
+    const first = tryParseSchema(lastText, config.schema)
+    if (first.ok) {
+      return buildResult(first.data, result)
     }
 
-    const result = next.value
-    const lastText = result.steps.at(-1)?.text
+    // Schema repair — one extra pass on the shared journal/workspace.
+    // Each engine run emits its own event sequence including a
+    // `run_end`; consumers see two run_ends when a retry happens.
+    const retryResult = yield* stream(backend, {
+      system,
+      prompt: repairPrompt(first.error),
+      toolkit,
+      maxTurns: 1,
+      signal: config.signal,
+      hooks: config.hooks,
+      compaction: resolveCompaction(config.compaction),
+      truncation: config.truncation,
+      journal: prepared.journal,
+      workspace: prepared.workspace,
+    })
 
-    return {
-      output: lastText,
-      steps: result.steps,
-      history: result.history,
-      settleReason: result.settleReason,
-      usage: {
-        input: result.totalInputTokens,
-        output: result.totalOutputTokens,
-        cached: result.totalCachedTokens,
-      },
-    }
-  } finally {
-    try {
-      await finalizeEngine(gen)
-    } catch {
-      // Finalization errors must not mask the stream result or original throw.
-    }
+    const merged = mergeRuns(result, retryResult)
+    const retryText = retryResult.steps.at(-1)?.text
+    const second = tryParseSchema(retryText, config.schema)
+    return buildResult(second.ok ? second.data : undefined, merged)
   }
+
+  return buildResult(lastText, result)
 }
 
 /** Open a prior managed durable runtime. Alias of `openRuntime()`. */
@@ -685,128 +466,144 @@ export async function hydrate(
   messages: Message[],
   opts: Runtime | ManagedRuntimeOptions = {},
 ): Promise<Runtime> {
-  const { journal, workspace } = await ensureRuntime(opts)
-  await seedJournal(journal, messages)
+  const { journal, workspace } = await runtime.ensure(opts)
+  await runtime.seed(journal, messages)
   return { journal, workspace }
 }
 
-async function prepareRunConfig<W extends Workspace>(
-  config: AgenticConfig<W>,
-): Promise<{
-  journal: Journal
-  workspace: W
-}> {
-  // `resume`, `messages`, and explicit `journal`/`workspace` are
-  // pairwise exclusive — each leaves the journal with a different
-  // history, and combining them would silently pick one.
-  if (config.resume && config.messages) {
-    throw new Error(
-      'Pass either "resume" or "messages", not both. Use replay() to inspect durable history separately.',
-    )
-  }
-  if (config.resume && (config.journal || config.workspace)) {
-    throw new Error(
-      'Pass either "resume" or explicit "journal" + "workspace", not both.',
-    )
-  }
-  if (config.messages && (config.journal || config.workspace)) {
-    throw new Error(
-      'Pass either caller-owned "messages" or explicit "journal" + "workspace", not both. Use hydrate() to seed a provided runtime pair.',
-    )
-  }
+// ─── Support: model strings ─────────────────────────────────────────────────
 
-  if (config.resume) {
-    const resumed = await resume(config.resume)
-    return {
-      journal: resumed.journal,
-      workspace: resumed.workspace as unknown as W,
+function parseModelString(model: string): {
+  provider: string
+  model: string
+} {
+  const slash = model.indexOf("/")
+  if (slash === -1) {
+    throw new Error(
+      `Invalid model format: "${model}". ` +
+        `Expected "provider/model" ` +
+        `(e.g. "anthropic/claude-haiku-4-5").`,
+    )
+  }
+  const prefix = model.slice(0, slash)
+  const modelName = model.slice(slash + 1)
+
+  for (const desc of allProviders()) {
+    const p = desc.modelPrefix ?? desc.name
+    if (p === prefix) {
+      return { provider: desc.name, model: modelName }
     }
   }
 
-  const { journal, workspace } = await ensureRuntime({
-    journal: config.journal,
-    workspace: config.workspace,
-  })
-
-  // `EngineConfig` deliberately has no in-memory message list — the
-  // agentic surface seeds them into the journal instead so replay
-  // reconstructs them like any other turn.
-  if (config.messages && config.messages.length > 0) {
-    await seedJournal(journal, config.messages)
-  }
-
-  return {
-    journal,
-    workspace: workspace as W,
-  }
-}
-
-async function ensureRuntime(
-  opts:
-    | Runtime
-    | ManagedRuntimeOptions
-    | {
-        journal?: Journal
-        workspace?: Workspace
-      },
-): Promise<Runtime> {
-  if (isRuntime(opts)) {
-    return { journal: opts.journal, workspace: opts.workspace }
-  }
-
-  const journal = "journal" in opts ? opts.journal : undefined
-  const workspace = "workspace" in opts ? opts.workspace : undefined
-  if (journal && workspace) {
-    return { journal, workspace }
-  }
-  if (journal || workspace) {
-    throw new Error(
-      'Pass both "journal" and "workspace", or neither and let ronde create the default pair.',
-    )
-  }
-
-  return createRuntime(isManagedRuntimeOptions(opts) ? opts : {})
-}
-
-function isRuntime(
-  value:
-    | Runtime
-    | ManagedRuntimeOptions
-    | {
-        journal?: Journal
-        workspace?: Workspace
-      },
-): value is Runtime {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "journal" in value &&
-    "workspace" in value &&
-    value.journal !== undefined &&
-    value.workspace !== undefined
+  const known = [...allProviders()].map((d) => d.modelPrefix ?? d.name)
+  throw new Error(
+    `Unknown provider "${prefix}". ` + `Known providers: ${known.join(", ")}.`,
   )
 }
 
-function isManagedRuntimeOptions(
-  value:
-    | Runtime
-    | ManagedRuntimeOptions
-    | {
-        journal?: Journal
-        workspace?: Workspace
-      },
-): value is ManagedRuntimeOptions {
-  return !("journal" in value) && !("workspace" in value)
+function buildBackend(modelStr: string): ConfiguredBackend {
+  const { provider, model } = parseModelString(modelStr)
+  return withRetry(
+    createBackend({
+      provider,
+      model,
+    }),
+  )
 }
 
-async function seedJournal(
-  journal: Journal,
-  messages: Message[],
-): Promise<void> {
-  for (const message of messages) {
-    await journal.event(JournalEvent.message(message))
+// ─── Support: schema ────────────────────────────────────────────────────────
+
+function buildSchemaInstruction(schema: z.ZodType): string {
+  const jsonSchema = z.toJSONSchema(schema, { unrepresentable: "any" })
+  return (
+    "\n\n# Final output schema\n\n" +
+    "Only your final response is parsed as structured output; intermediate turns are free-form. " +
+    "When the work is complete, your final response must be valid JSON matching the schema below — " +
+    "no prose, no markdown, no code fences, just the raw JSON.\n\n" +
+    JSON.stringify(jsonSchema, null, 2)
+  )
+}
+
+function repairPrompt(error: string): string {
+  return (
+    `Your previous response did not match the required JSON schema. ` +
+    `Error: ${error}\n\nPlease respond with valid JSON matching the schema.`
+  )
+}
+
+function tryParseSchema<T>(
+  text: string | undefined,
+  schema: z.ZodType<T>,
+): Result<T> {
+  if (!text) {
+    return err("No text output to parse")
   }
-  if (messages.length > 0) {
-    await journal.commit()
+  let json = text.trim()
+  if (json.startsWith("```")) {
+    json = json.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "")
+  }
+  try {
+    const parsed = JSON.parse(json)
+    const result = schema.safeParse(parsed)
+    if (result.success) {
+      return ok(result.data)
+    }
+    return err(result.error.message)
+  } catch (e) {
+    return err(`Invalid JSON: ${(e as Error).message}`)
+  }
+}
+
+// ─── Support: result shaping ────────────────────────────────────────────────
+
+function buildResult(
+  output: unknown,
+  raw: {
+    steps: AgentStep[]
+    history: Message[]
+    settleReason: SettleReason
+    totalInputTokens: number
+    totalOutputTokens: number
+    totalCachedTokens: number
+  },
+): AgenticResult<any> {
+  return {
+    output,
+    steps: raw.steps,
+    history: raw.history,
+    settleReason: raw.settleReason,
+    usage: {
+      input: raw.totalInputTokens,
+      output: raw.totalOutputTokens,
+      cached: raw.totalCachedTokens,
+    },
+  }
+}
+
+function mergeRuns(first: EngineResult, retry: EngineResult): EngineResult {
+  return {
+    ...first,
+    steps: [...first.steps, ...retry.steps],
+    history: retry.history,
+    settleReason: retry.settleReason,
+    totalInputTokens: first.totalInputTokens + retry.totalInputTokens,
+    totalOutputTokens: first.totalOutputTokens + retry.totalOutputTokens,
+    totalCachedTokens: first.totalCachedTokens + retry.totalCachedTokens,
+  }
+}
+
+// ─── Support: config defaults ───────────────────────────────────────────────
+
+const emptyToolkit: Toolkit = {
+  execute: async (name) => err(`Tool "${name}" not found`),
+  schemas: [],
+  formatters: {},
+}
+
+function resolveCompaction(
+  value: CompactionStrategy | false | undefined,
+): CompactionStrategy | undefined {
+  if (value !== false) {
+    return value ?? new DefaultCompactionStrategy()
   }
 }

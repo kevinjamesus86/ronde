@@ -4,7 +4,7 @@ import path from "node:path"
 import { JournalEvent } from "@ronde/core/journal"
 import { emptyUsage, StopReason } from "@ronde/core/completion"
 import { statFsRuntime } from "@ronde/fs"
-import { createManagedRuntime, openRuntime } from "../src/managed-runtime.js"
+import { createManagedRuntime, openRuntime } from "../src/managed.js"
 import { useTmp, withEnv } from "./support.js"
 
 const tmp = useTmp()

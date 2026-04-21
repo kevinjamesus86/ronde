@@ -86,6 +86,7 @@ How modules are organized and what they're allowed to know about each other.
 
 - **Strict boundaries**: primitives own one concern and don't cross. The engine records to the journal. Tools produce to the workspace. Neither side sees the other's internals.
 - **One engine, many consumers**: the loop is a single primitive. Promise-based, streaming, and callback-based consumers are all sugar on top.
+- **Primitives are the most general form**: the lowest layer is the richest one — it exposes the fullest signal so consumers can specialize. Less-general wrappers stack over it; they never drive the primitive in parallel. The more general form can always collapse into the less; the reverse is lossy.
 - **Portable primitives, managed convenience**: core abstractions are backend-agnostic and work with any implementation. Convenience APIs are opinionated over the default managed layout. Two layers, cleanly separated. Don't leak managed-layout assumptions into the primitives.
 
 ### API surface
@@ -103,6 +104,19 @@ How shape encodes meaning. Types should make valid states the only states that c
 
 - **Unset is `undefined`**: don't use `null` as a sentinel for "not initialized" or "not yet." If you need to distinguish more than set vs unset, use a proper discriminator — a boolean flag, a discriminated union, or a typed state object. Magic values hide state transitions behind implicit conventions instead of making them visible in the type system.
 - **Maybes don't pile up**: when `| null` / `| undefined` / `field?:` accumulate on a type, it's almost always hiding a discriminated union — different states with different valid fields. Reach for a tagged union, not a struct of maybes. Optionality is fine at the outermost public-API config layer where callers want to opt in (`AgenticConfig.system?: string`). Internally it's a smell — invalid combinations compile and every read gets a null check.
+- **Types are a testable surface**: overload resolution, generic inference, and public-API shape are contracts. Pin them with compile-time assertions that sit alongside behavioral tests. A widened return type or a broken inference path can pass every runtime test; a shape assertion catches it at type-check.
+
+### Naming
+
+How names carry weight. Names pull from their surroundings — the type system, file context, domain vocabulary — and add only what's unique.
+
+- **File context carries the prefix**: a file that names its concern earns the domain prefix; symbols inside drop it. A namespace import at the call site puts the prefix on the caller, once, instead of repeating it on every symbol. A name that restates its file's context is noise.
+
+### Rigor
+
+How we engage with claims about the code — bug reports, audits, reviews, second-hand assertions.
+
+- **Prove before you fix**: every claim deserves a test before a fix. A failing test confirms a real bug; a passing test documents current behavior. The discipline keeps work grounded in evidence and blocks speculative rewrites that paper over misunderstandings.
 
 ## Commit convention
 

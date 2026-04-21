@@ -21,6 +21,84 @@ export interface ManagedRuntimeOptions {
   name?: string
 }
 
+/**
+ * Create a fresh runtime pair.
+ *
+ * Default (no options): returns a managed fs runtime under ronde's
+ * managed layout policy. This is the batteries-included path:
+ * durable by default, with explicit `@ronde/mem` opt-in for callers
+ * who want ephemeral runtimes instead.
+ */
+export async function createRuntime(
+  opts: ManagedRuntimeOptions = {},
+): Promise<FsRuntime> {
+  return createManagedRuntime(opts)
+}
+
+export async function createManagedRuntime(
+  opts: ManagedRuntimeOptions = {},
+): Promise<FsRuntime> {
+  const projectDir = resolveManagedProjectDir(opts)
+
+  if (opts.name !== undefined) {
+    const entryName = toManagedEntryName(opts.name)
+    return createFsRuntime(path.join(projectDir, entryName))
+  }
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const entryName = newRuntimeId()
+    try {
+      return await createFsRuntime(path.join(projectDir, entryName))
+    } catch (error) {
+      if (!isAlreadyExistsError(error)) {
+        throw error
+      }
+    }
+  }
+
+  throw new Error("Failed to allocate a fresh managed runtime directory.")
+}
+
+/**
+ * Open an existing managed fs-backed runtime.
+ *
+ * Named mode opens `<root>/projects/<project>/<name>/`. Unnamed mode
+ * selects the latest valid runtime under that project bucket using
+ * active-segment mtime, then `createdAt`, then `id`.
+ */
+export async function openRuntime(
+  opts?: ManagedRuntimeOptions,
+): Promise<FsRuntime>
+
+export async function openRuntime(
+  name: string,
+  opts?: Omit<ManagedRuntimeOptions, "name">,
+): Promise<FsRuntime>
+
+export async function openRuntime(
+  nameOrOpts: string | ManagedRuntimeOptions,
+): Promise<FsRuntime>
+
+export async function openRuntime(
+  nameOrOpts: string | ManagedRuntimeOptions = {},
+  maybeOpts: Omit<ManagedRuntimeOptions, "name"> = {},
+): Promise<FsRuntime> {
+  const opts =
+    typeof nameOrOpts === "string"
+      ? { ...maybeOpts, name: nameOrOpts }
+      : nameOrOpts
+
+  const projectDir = resolveManagedProjectDir(opts)
+  const targetDir =
+    opts.name !== undefined
+      ? path.join(projectDir, toManagedEntryName(opts.name))
+      : await latestManagedRuntimeDir(projectDir)
+
+  return openFsRuntime(targetDir)
+}
+
+// ─── Internal policy helpers ────────────────────────────────────────────────
+
 function expandTilde(p: string): string {
   if (p === "~" || p.startsWith("~/")) {
     return path.join(os.homedir(), p.slice(1))
@@ -95,64 +173,6 @@ async function readManagedState(dir: string): Promise<ManagedRuntimeMeta> {
     dir,
     stat,
   }
-}
-
-export async function createManagedRuntime(
-  opts: ManagedRuntimeOptions = {},
-): Promise<FsRuntime> {
-  const projectDir = resolveManagedProjectDir(opts)
-
-  if (opts.name !== undefined) {
-    const entryName = toManagedEntryName(opts.name)
-    return createFsRuntime(path.join(projectDir, entryName))
-  }
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const entryName = newRuntimeId()
-    try {
-      return await createFsRuntime(path.join(projectDir, entryName))
-    } catch (error) {
-      if (!isAlreadyExistsError(error)) {
-        throw error
-      }
-    }
-  }
-
-  throw new Error("Failed to allocate a fresh managed runtime directory.")
-}
-
-/**
- * Open an existing managed fs-backed runtime.
- *
- * Named mode opens `<root>/projects/<project>/<name>/`. Unnamed mode
- * selects the latest valid runtime under that project bucket using
- * active-segment mtime, then `createdAt`, then `id`.
- */
-export async function openRuntime(
-  opts?: ManagedRuntimeOptions,
-): Promise<FsRuntime>
-
-export async function openRuntime(
-  name: string,
-  opts?: Omit<ManagedRuntimeOptions, "name">,
-): Promise<FsRuntime>
-
-export async function openRuntime(
-  nameOrOpts: string | ManagedRuntimeOptions = {},
-  maybeOpts: Omit<ManagedRuntimeOptions, "name"> = {},
-): Promise<FsRuntime> {
-  const opts =
-    typeof nameOrOpts === "string"
-      ? { ...maybeOpts, name: nameOrOpts }
-      : nameOrOpts
-
-  const projectDir = resolveManagedProjectDir(opts)
-  const targetDir =
-    opts.name !== undefined
-      ? path.join(projectDir, toManagedEntryName(opts.name))
-      : await latestManagedRuntimeDir(projectDir)
-
-  return openFsRuntime(targetDir)
 }
 
 async function latestManagedRuntimeDir(projectDir: string): Promise<string> {
