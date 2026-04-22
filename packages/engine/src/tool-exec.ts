@@ -206,6 +206,7 @@ export async function* executeToolCalls<W extends Workspace>(
     const outcome = outcomes[i]!
 
     step.toolCalls.push({
+      id: tc.toolCallId,
       name: tc.name,
       args: tc.arguments,
       output: outcome.output,

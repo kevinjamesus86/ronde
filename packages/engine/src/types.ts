@@ -81,6 +81,7 @@ export interface EngineConfig<W extends Workspace = Workspace> {
 }
 
 export interface AgentStepToolCall {
+  id: string
   name: string
   args: Record<string, unknown>
   output: ToolOutput
