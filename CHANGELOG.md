@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.7.0
+
+[Compare v0.6.0…v0.7.0](https://github.com/kevinjamesus86/ronde/compare/v0.6.0...v0.7.0)
+
+Pure tool-exec + per-pair budget. Eager journaling of tool pairs was unsound under preemptive compaction — pairs got durably committed to the pre-partition generation before the engine could decide whether they belonged there. Execution is now pure compute; the engine owns persistence and sizes each pair against the context budget, committing what fits and buffering the rest for compaction replay.
+
+### Breaking changes
+
+- **`ToolOutput<D>` → `ToolResult<D>`** and **`formatToolOutput` → `formatToolResult`** in `@ronde/core/toolkit`. Reads as `tool.execute() → ToolResult`. ([`f9d2e3c`](f9d2e3c))
+- **Old `ToolResult { ok, content }` in `@ronde/core/tool` removed.** The `tool_result` event and `onToolResult` observer callback now carry `content: string` and `result: ToolResult` side by side instead of via a dedicated wrapper type. ([`f9d2e3c`](f9d2e3c))
+- **`AgentStepToolCall`** replaces `output: ToolOutput` with `content: string` + `result: ToolResult`. Trajectory export now has both what the model saw and the raw exec return. ([`f9d2e3c`](f9d2e3c))
+- **`onToolResult(turn, call, content, result)`** — observer callback adds a `content` parameter. ([`f9d2e3c`](f9d2e3c))
+
+### Fixes
+
+- **Tool-call args no longer double-counted** in the preemptive-compaction trigger. Args were already in `response.outputTokens`; the engine was adding them a second time via `estimateTokens(args)`. Pair-level estimate now counts only the result content.
+- **Every `tool_use` yields exactly one `tool_result`** under external abort, formatter failure, and unlaunched-tool cancellation. Pinned by a new invariant test that also asserts the raw `ToolResult` structure never reaches the journal.
+
 ## v0.6.0
 
 [Compare v0.5.0…v0.6.0](https://github.com/kevinjamesus86/ronde/compare/v0.5.0...v0.6.0)
