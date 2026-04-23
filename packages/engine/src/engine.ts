@@ -13,13 +13,14 @@ import {
 import {
   MessageType,
   Role,
+  toolResultPart,
   type Message,
   userMessage,
 } from "@ronde/core/message"
 import { JournalEvent, type Journal } from "@ronde/core/journal"
 import type { Lax } from "@ronde/core"
 import type { ToolCall } from "@ronde/core/tool"
-import { bindToolkitRuntime } from "@ronde/core/toolkit"
+import { bindToolkitRuntime, type ToolResult } from "@ronde/core/toolkit"
 import { asGenerator } from "@ronde/core/stream"
 import type { Workspace } from "@ronde/core/workspace"
 import type { CompactionResult } from "./compaction.js"
@@ -37,7 +38,7 @@ import {
 } from "./types.js"
 import { executeToolCalls } from "./tool-exec.js"
 import { splitResponse, translateBufferedMessages } from "./replay.js"
-import { zip } from "./zip.js"
+import { estimateTokens } from "@ronde/core/tokens"
 
 /**
  * Subset of EngineEvent that is also shaped as a JournalEvent — these
@@ -125,10 +126,9 @@ function toList<T extends object>(v: T | readonly T[]): readonly T[] {
  * commits again at `run_end`. Consumers that reopen the same journal
  * after a crash pick up cleanly at the last turn boundary.
  *
- * Tool-call/tool-result pairs are journaled atomically from inside
- * `executeToolCalls` as a single `{ parts: [tool_use, tool_result] }`
- * message, so the durable record never contains an orphaned call
- * without its result.
+ * Tool-call/tool-result pairs are journaled atomically as a single
+ * `{ parts: [tool_use, tool_result] }` message, so the durable record
+ * never contains an orphaned call without its result.
  *
  * ## Settle reasons (EngineResult.settleReason)
  *
@@ -583,33 +583,76 @@ export async function* engine<W extends Workspace = Workspace>(
           }
         }
 
-        const { resultParts, estimatedTokens } = yield* executeToolCalls(
-          pendingCalls,
-          toolkitRuntime,
-          step,
-          turn,
-          abortSignal,
-          history,
-          approvals,
-          workspace,
-          journal,
-          truncation?.maxInline,
-        )
-
-        const pairs: Message[] = zip(pendingCalls, resultParts).map(
-          ([call, result]) => ({ parts: [call, result] }),
-        )
-
-        const nextTurnInput =
+        // Per-pair budget check: commit what fits, buffer the rest.
+        // Once we start buffering we must keep buffering — tool pairs
+        // are ordered, and replaying a later pair before an earlier
+        // one that got deferred would scramble the transcript.
+        let runningEstimate =
           (response.usage?.inputTokens ?? 0) +
-          (response.usage?.outputTokens ?? 0) +
-          estimatedTokens
+          (response.usage?.outputTokens ?? 0)
+        const buffered: Message[] = []
+        const pendingByCallId = new Map(
+          pendingCalls.map((tc) => [tc.toolCallId, tc]),
+        )
+        const settledByCallId = new Map<
+          string,
+          { content: string; result: ToolResult }
+        >()
 
-        if (nextTurnInput + compactSafetyMargin >= maxContext) {
+        for await (const event of executeToolCalls({
+          calls: pendingCalls,
+          toolkit: toolkitRuntime,
+          turn,
+          abort: abortSignal,
+          history,
+          workspace,
+          approvals,
+          maxInline: truncation?.maxInline,
+        })) {
+          if (event.type === "tool_result") {
+            const toolUse = pendingByCallId.get(event.call.toolUseId)!
+            const resultPart = toolResultPart({
+              toolCallId: event.call.toolUseId,
+              content: event.content,
+              ok: event.result.ok,
+            })
+            settledByCallId.set(event.call.toolUseId, {
+              content: event.content,
+              result: event.result,
+            })
+            // Args already counted in response.outputTokens — only
+            // the result content adds new pressure.
+            runningEstimate += estimateTokens(event.content)
+            const pair: Message = { parts: [toolUse, resultPart] }
+            if (
+              buffered.length === 0 &&
+              runningEstimate + compactSafetyMargin < maxContext
+            ) {
+              await send(pair)
+            } else {
+              buffered.push(pair)
+            }
+          }
+          yield event
+        }
+
+        // Call order, not settle order — stable trajectory export.
+        for (const tc of pendingCalls) {
+          const s = settledByCallId.get(tc.toolCallId)!
+          step.toolCalls.push({
+            id: tc.toolCallId,
+            name: tc.name,
+            args: tc.arguments,
+            content: s.content,
+            result: s.result,
+          })
+        }
+
+        if (buffered.length > 0) {
           yield* finalizeStep()
           const outcome = yield* attemptCompaction({
             kind: "preemptive",
-            buffered: pairs,
+            buffered,
           })
           if (outcome === "fatal") {
             settleReason = "compaction_failed"
@@ -618,7 +661,6 @@ export async function* engine<W extends Workspace = Workspace>(
           continue
         }
 
-        append(pairs)
         yield* finalizeStep()
       } catch (e) {
         step.stopReason = StopReason.Unknown

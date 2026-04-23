@@ -4,7 +4,7 @@ import path from "node:path"
 import { spawn } from "node:child_process"
 import { z } from "zod/v4"
 import { genHex } from "@ronde/core/id"
-import type { StatefulToolContext, ToolOutput } from "@ronde/core/toolkit"
+import type { StatefulToolContext, ToolResult } from "@ronde/core/toolkit"
 import { ok, err } from "@ronde/core/result"
 import type { DirectoryWorkspace } from "@ronde/core/workspace"
 import type { PathContext } from "./context.js"
@@ -101,7 +101,7 @@ async function run(
   snapshot: boolean | Snapshot,
   args: ShellArgs,
   ctx: StatefulToolContext<ShellState, DirectoryWorkspace>,
-): Promise<ToolOutput<ShellData>> {
+): Promise<ToolResult<ShellData>> {
   await ensureSnapshot(snapshot, ctx.state)
   const raw = await runProcess(pathCtx, sandbox, args, ctx)
   if (!raw.ok) {
@@ -120,7 +120,7 @@ async function runProcess(
   sandbox: boolean | SandboxConfig,
   args: ShellArgs,
   ctx: StatefulToolContext<ShellState>,
-): Promise<ToolOutput<ShellData>> {
+): Promise<ToolResult<ShellData>> {
   const enabled = sandbox !== false
   const config = typeof sandbox === "object" ? sandbox : undefined
   const profile = pathCtx.sandboxProfile(config)

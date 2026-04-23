@@ -27,7 +27,7 @@ describe("@ronde/tools shell output shaping", () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      // Tool returns raw stdout; framework cuts at formatToolOutput layer.
+      // Tool returns raw stdout; framework cuts at formatToolResult layer.
       expect(result.data.stdout.length).toBeGreaterThanOrEqual(40000)
     }
   })

@@ -212,7 +212,7 @@ describe("@ronde/engine error propagation", () => {
     )
 
     expect(result.settleReason).toBe(StopReason.EndTurn)
-    expect(result.steps[0]?.toolCalls[0]?.output).toMatchObject({
+    expect(result.steps[0]?.toolCalls[0]?.result).toMatchObject({
       ok: false,
       error: expect.stringContaining("tool exploded"),
     })
@@ -235,7 +235,7 @@ describe("@ronde/engine error propagation", () => {
     )
 
     expect(result.settleReason).toBe(StopReason.EndTurn)
-    expect(result.steps[0]?.toolCalls[0]?.output).toEqual(err("tool error"))
+    expect(result.steps[0]?.toolCalls[0]?.result).toEqual(err("tool error"))
   })
 
   it("finalizes the turn before propagating a CompletionError of kind other than ContextLengthExceeded", async () => {
@@ -429,6 +429,46 @@ describe("@ronde/engine progress event taxonomy", () => {
     // still land in the journal via sendAssistantResponse/send. Cast
     // widens the literal-union so the comparison compiles.
     expect(events.some((ev) => (ev.type as string) === "message")).toBe(false)
+  })
+})
+
+describe("@ronde/engine journal invariants", () => {
+  // AgentStepToolCall.result holds the raw ok(data)/err(msg) — useful
+  // for trajectory export but never part of the durable record. The
+  // model only ever sees the formatted content. If a future change
+  // routes `result` into a journaled shape (e.g. by adding it to
+  // ToolResultPart, or by journaling the whole AgentStep at turn_end),
+  // this test catches it.
+  it("never journals the raw ToolResult structure — only formatted content", async () => {
+    const echo = tool()({
+      name: "echo",
+      description: "Echo",
+      parameters: z.object({ text: z.string() }),
+      execute: async (args) => ok({ structured: args.text, hidden: 42 }),
+      format: (data) =>
+        `formatted:${(data as { structured: string }).structured}`,
+    })
+
+    const backend = mockHandler((_req, call) => {
+      if (call === 0) {
+        return toolResponse("echo", { text: "hi" })
+      }
+      return textResponse("done")
+    })
+
+    const { journal } = await driveEngine(backend, {
+      prompt: "go",
+      toolkit: echo,
+    })
+
+    const flat = JSON.stringify(journal.active)
+    // The raw ok payload contains "structured" and "hidden: 42" — they
+    // live on ToolResult.data and must not leak into the journal.
+    expect(flat).not.toContain('"hidden"')
+    expect(flat).not.toContain('"structured"')
+    // The formatted content is what the model sees and what the
+    // journal records.
+    expect(flat).toContain("formatted:hi")
   })
 })
 

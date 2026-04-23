@@ -11,13 +11,6 @@ export interface ToolCall {
   arguments: Record<string, unknown>
 }
 
-/** The observable outcome of a tool call. */
-export interface ToolResult {
-  ok: boolean
-  /** Formatted content the model sees. */
-  content: string
-}
-
 /**
  * Accept a const enum value OR its underlying string literal.
  * Lets consumers write `"low"` instead of `Effort.Low`.

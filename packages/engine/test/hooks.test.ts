@@ -229,7 +229,7 @@ describe("@ronde/engine approve hook", () => {
       },
     )
 
-    expect(result.steps[0]?.toolCalls[0]?.output).toEqual(ok("hi"))
+    expect(result.steps[0]?.toolCalls[0]?.result).toEqual(ok("hi"))
   })
 
   it("rejects tool calls when approve returns false", async () => {
@@ -251,10 +251,10 @@ describe("@ronde/engine approve hook", () => {
       },
     )
 
-    const output = result.steps[0]?.toolCalls[0]?.output
-    expect(output?.ok).toBe(false)
-    if (output && !output.ok) {
-      expect(output.error).toContain("rejected")
+    const toolResult = result.steps[0]?.toolCalls[0]?.result
+    expect(toolResult?.ok).toBe(false)
+    if (toolResult && !toolResult.ok) {
+      expect(toolResult.error).toContain("rejected")
     }
   })
 
@@ -280,7 +280,7 @@ describe("@ronde/engine approve hook", () => {
       },
     )
 
-    expect(result.steps[0]?.toolCalls[0]?.output).toEqual(ok("hi"))
+    expect(result.steps[0]?.toolCalls[0]?.result).toEqual(ok("hi"))
   })
 
   it("runs approvals before parallel tool execution begins", async () => {

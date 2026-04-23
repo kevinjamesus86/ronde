@@ -27,13 +27,13 @@ import type { Workspace } from "./workspace.js"
 /** Default inline-output budget (characters) before the framework spills and truncates. */
 export const DEFAULT_MAX_INLINE = 25_000
 
-export type ToolOutput<D = unknown> = Result<D>
+export type ToolResult<D = unknown> = Result<D>
 
 /** Tool execute may return a Promise or an AsyncGenerator whose
  *  yields are textual progress deltas and whose return is the output. */
 export type ToolExecuteReturn<D = unknown> =
-  | Promise<ToolOutput<D>>
-  | AsyncGenerator<string, ToolOutput<D>, void>
+  | Promise<ToolResult<D>>
+  | AsyncGenerator<string, ToolResult<D>, void>
 
 export interface ToolContext<W extends Workspace = Workspace> {
   turn: number
@@ -124,12 +124,12 @@ export function bindToolkitRuntime<W extends Workspace = Workspace>(
 /** Default formatter: returns error string, passes through strings, JSON.stringify for objects. */
 export function defaultFormatter(
   _toolName: string,
-  output: ToolOutput,
+  result: ToolResult,
 ): string {
-  if (!output.ok) {
-    return output.error
+  if (!result.ok) {
+    return result.error
   }
-  const { data } = output
+  const { data } = result
   if (typeof data === "string") {
     return data
   }
@@ -140,7 +140,7 @@ export function defaultFormatter(
 }
 
 /**
- * Context for framework-level truncation. When passed, `formatToolOutput`
+ * Context for framework-level truncation. When passed, `formatToolResult`
  * checks the rendered string against `maxInline` and, if over, spills the
  * full content to the workspace and returns a truncated slice with a
  * neutral hint appended. The slice strategy comes from the toolkit's
@@ -161,16 +161,16 @@ export interface FormatContext {
  * slice plus a neutral hint. When `ctx` is omitted (tests, non-engine
  * callers), the function just renders — no spill, no size check.
  */
-export async function formatToolOutput(
+export async function formatToolResult(
   toolkit: Toolkit<any>,
   toolName: string,
-  output: ToolOutput,
+  result: ToolResult,
   ctx?: FormatContext,
 ): Promise<string> {
   const formatter = toolkit.formatters[toolName]
   const rendered = formatter
-    ? renderWithFormatter(formatter, output)
-    : defaultFormatter(toolName, output)
+    ? renderWithFormatter(formatter, result)
+    : defaultFormatter(toolName, result)
 
   if (!ctx) {
     return rendered
@@ -190,15 +190,15 @@ export async function formatToolOutput(
 
 function renderWithFormatter(
   formatter: ToolFormatterFn,
-  output: ToolOutput,
+  result: ToolResult,
 ): string {
-  if (output.ok) {
-    return formatter(output.data)
+  if (result.ok) {
+    return formatter(result.data)
   }
-  if (output.data === undefined) {
-    return output.error
+  if (result.data === undefined) {
+    return result.error
   }
-  return `${output.error}\n${formatter(output.data)}`
+  return `${result.error}\n${formatter(result.data)}`
 }
 
 /**
@@ -310,7 +310,7 @@ export interface ToolDefBase {
 type ExecuteFn<Args, Ctx, D> = (
   args: Args,
   ctx: Ctx,
-) => Awaitable<ToolOutput<D>> | AsyncGenerator<string, ToolOutput<D>, void>
+) => Awaitable<ToolResult<D>> | AsyncGenerator<string, ToolResult<D>, void>
 
 // stateless
 export function tool<T extends z.ZodType, D = unknown>(
@@ -650,7 +650,7 @@ async function* wrapStatefulGenerator(
   args: unknown,
   baseCtx: ToolContext,
   ensureState: () => Promise<unknown>,
-): AsyncGenerator<string, ToolOutput, void> {
+): AsyncGenerator<string, ToolResult, void> {
   const state = await ensureState()
   return yield* asGenerator(exec(args, { ...baseCtx, state }))
 }
@@ -660,7 +660,7 @@ async function wrapStatefulPromise(
   args: unknown,
   baseCtx: ToolContext,
   ensureState: () => Promise<unknown>,
-): Promise<ToolOutput> {
+): Promise<ToolResult> {
   const state = await ensureState()
-  return (await exec(args, { ...baseCtx, state })) as ToolOutput
+  return (await exec(args, { ...baseCtx, state })) as ToolResult
 }

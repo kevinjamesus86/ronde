@@ -195,7 +195,7 @@ This lets a tool call and its result live inside one `Message`:
 { parts: [toolCallPart({ ... }), toolResultPart({ ... })] }
 ```
 
-which is the atomic unit the engine writes durably for each completed tool
+which is the atomic unit the engine writes durably for each committed tool
 (see "Tool-pair journaling" below).
 
 Each part may carry opaque `meta` for provider-specific replay data
@@ -315,9 +315,13 @@ turn_start(N)
     [if tool calls:]
     → approve hook       → per tool; return false to reject
     → tool_call(N)       → EngineEvent (one per pending call, up front)
-    → execute tools      → bounded concurrency; each settle writes one
-                           canonical pair message { tool_use, tool_result }
-                           to the journal and yields tool_result(N)
+    → execute tools      → bounded concurrency; each settle yields
+                           tool_result(N) with both formatted content
+                           and the raw structured result. The engine
+                           assembles a canonical pair message
+                           { tool_use, tool_result } and either commits
+                           it to the journal (under budget) or buffers
+                           it for preemptive compaction replay.
     |
     → turn_end(N, step)  → EngineEvent; engine calls journal.commit()
     → postStep hook      → optional string feedback → loop continues next turn
@@ -338,22 +342,41 @@ is still running.
 
 ### Tool-pair journaling
 
-A tool call and its result are one atomic durability unit. `executeToolCalls`
+A tool call and its result are one atomic durability unit. The engine
 writes them as a single canonical `Message` with parts `[ToolCallPart,
-ToolResultPart]` — one `journal.event()` call per completed tool. `turn_end`
-is the commit boundary.
+ToolResultPart]` — one `journal.event()` call per committed tool.
+`turn_end` is the commit boundary.
+
+`executeToolCalls` is pure compute: it yields `tool_result` events (each
+carrying both formatted `content` and the raw structured `result`) and
+never touches the journal itself. The engine intercepts those events,
+sizes each pair against the context budget, and decides commit-or-buffer:
+
+- **Fits under budget** → `send(pair)` — append to history and
+  journal the pair atomically.
+- **Over budget** → push to an in-memory `buffered` list. Once any
+  pair is buffered, every subsequent pair is too (ordering discipline).
+  At end of turn, buffered pairs are handed to preemptive compaction,
+  which replays them as translated text in the new active slice.
 
 ```text
 [parallel tools running]
-   each settle → journal.event(message({ parts: [tool_use, tool_result] }))
+   each settle → engine yields tool_result(content, result)
+             → engine: runningEstimate += estimateTokens(content)
+             → if fits:    journal.event(message({ parts: [tool_use, tool_result] }))
+               otherwise:  buffered.push(pair)
 turn_end       → journal.commit()  (fsync)
+if buffered.length > 0:
+   attemptCompaction(preemptive, buffered)
+     → summary + translated(buffered) replaces the archived slice
 ```
 
-This makes an orphaned `tool_use` impossible by construction: a tool_use
-never reaches the journal without its result in the same record. A crash
-before `turn_end` loses any pair writes that hadn't committed — the
-corresponding tools were in-flight from the engine's perspective and
-replay simply omits them. The model re-decides on fresh context.
+This makes an orphaned `tool_use` impossible by construction: a
+tool_use never reaches the journal without its result in the same
+record. A crash before `turn_end` loses any pair writes that hadn't
+committed — the corresponding tools were in-flight from the engine's
+perspective and replay simply omits them. The model re-decides on
+fresh context.
 
 The engine also journals the assistant response's text/thinking portion
 separately, stripped of tool_use parts — those belong to pairs and don't
@@ -381,7 +404,7 @@ output per the tool's declared `truncate` strategy, and appends a
 neutral hint pointing at the spill URI.
 
 ```text
-formatToolOutput(toolkit, name, output, { workspace, toolUseId, maxInline })
+formatToolResult(toolkit, name, result, { workspace, toolUseId, maxInline })
     |
     → formatter renders data → string
     → if string <= maxInline  → pass through
@@ -480,7 +503,7 @@ settles (`tool_result`).
 **Delta events are ephemeral.** Nothing streams durably — deltas are live
 UX only, not in the journal. Reload sees only the authoritative
 counterparts (via the assistant message the engine writes, and the
-tool-pair message each completed tool produces).
+tool-pair message each committed tool produces).
 
 **Why both phases exist.** Deltas are optional; they only fire when the
 provider streams (and the tool author chose `async *execute`). The
@@ -527,9 +550,10 @@ JournalEvent  → written durably via Journal (lean, replay-oriented)
 Some events correspond closely across the boundary. Others do not.
 
 - `message` is durable-only. The engine writes it (assistant text/thinking
-  portions, and one canonical pair per completed tool — see "Tool-pair
-  journaling"); live consumers subscribe to the progress events, not a
-  separate `message` engine event.
+  portions, and a canonical pair per committed tool — see "Tool-pair
+  journaling"; pairs buffered by the per-pair budget replay as
+  translated text instead). Live consumers subscribe to the progress
+  events, not a separate `message` engine event.
 - `turn_end` exists on both sides; the durable form is leaner than the
   live step object. The engine calls `journal.commit()` right after
   writing it — turn boundaries are the natural durability checkpoint.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { Effort } from "@ronde/core/completion"
 import type { Awaitable, Lax } from "@ronde/core"
-import type { ToolCall, ToolResult } from "@ronde/core/tool"
+import type { ToolCall } from "@ronde/core/tool"
 
 describe("@ronde/core tool value contracts", () => {
   it("models ToolCall as provider toolUseId plus parsed arguments", () => {
@@ -13,18 +13,6 @@ describe("@ronde/core tool value contracts", () => {
 
     expect(call.toolUseId).toBe("call-1")
     expect(call.arguments).toEqual({ q: "ronde" })
-  })
-
-  it("models ToolResult as the model-facing formatted outcome", () => {
-    const result: ToolResult = {
-      ok: false,
-      content: "permission denied",
-    }
-
-    expect(result).toEqual({
-      ok: false,
-      content: "permission denied",
-    })
   })
 })
 

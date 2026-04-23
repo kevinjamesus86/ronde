@@ -1,27 +1,55 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
-import { StopReason, emptyUsage } from "@ronde/core/completion"
 import { err, ok } from "@ronde/core/result"
-import { MessageType, toolCallPart } from "@ronde/core/message"
+import { toolCallPart } from "@ronde/core/message"
 import { merge, tool } from "@ronde/core/toolkit"
 import type { EngineEvent } from "../src/types.js"
-import { executeToolCalls, type ToolExecutionResult } from "../src/tool-exec.js"
-import { TestJournal, TestWorkspace } from "./support.js"
+import {
+  executeToolCalls,
+  type ExecuteToolCallsInput,
+} from "../src/tool-exec.js"
+import { TestWorkspace } from "./support.js"
 
-async function drainTool(
-  gen: AsyncGenerator<EngineEvent, ToolExecutionResult, unknown>,
-): Promise<ToolExecutionResult & { events: EngineEvent[] }> {
+function baseInput(
+  overrides: Partial<ExecuteToolCallsInput<TestWorkspace>>,
+): ExecuteToolCallsInput<TestWorkspace> {
+  return {
+    calls: [],
+    toolkit: {
+      schemas: [],
+      async execute() {
+        return err("unknown")
+      },
+      formatters: {},
+    },
+    turn: 1,
+    abort: new AbortController().signal,
+    history: [],
+    workspace: new TestWorkspace(),
+    ...overrides,
+  }
+}
+
+async function drain(
+  gen: AsyncGenerator<EngineEvent, void, unknown>,
+): Promise<EngineEvent[]> {
   const events: EngineEvent[] = []
   let next = await gen.next()
   while (!next.done) {
     events.push(next.value)
     next = await gen.next()
   }
-  return { ...next.value, events }
+  return events
+}
+
+function resultsOnly(
+  events: EngineEvent[],
+): Extract<EngineEvent, { type: "tool_result" }>[] {
+  return events.filter((e) => e.type === "tool_result")
 }
 
 describe("@ronde/engine executeToolCalls", () => {
-  it("emits tool_call events before any tool_result events", async () => {
+  it("emits tool_call then tool_result per tool", async () => {
     const toolkit = tool<TestWorkspace>()({
       name: "echo",
       description: "Echo",
@@ -30,77 +58,52 @@ describe("@ronde/engine executeToolCalls", () => {
       format: (data) => (data as { echoed: string }).echoed,
     })
 
-    const result = await drainTool(
+    const events = await drain(
       executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "call-1",
-            name: "echo",
-            arguments: { text: "hello" },
-          }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        baseInput({
+          toolkit,
+          calls: [
+            toolCallPart({
+              toolCallId: "call-1",
+              name: "echo",
+              arguments: { text: "hello" },
+            }),
+          ],
+        }),
       ),
     )
 
-    expect(result.events.map((event) => event.type)).toEqual([
-      "tool_call",
-      "tool_result",
-    ])
+    expect(events.map((e) => e.type)).toEqual(["tool_call", "tool_result"])
   })
 
-  it("formats tool results through the toolkit formatter pipeline", async () => {
+  it("tool_result carries both formatted content and raw result", async () => {
     const toolkit = tool<TestWorkspace>()({
       name: "echo",
       description: "Echo",
       parameters: z.object({ text: z.string() }),
       execute: async (args) => ok({ echoed: args.text }),
-      format: (data) => `echo:${(data as { echoed: string }).echoed}`,
+      format: (data) => `fmt:${(data as { echoed: string }).echoed}`,
     })
 
-    const result = await drainTool(
-      executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "call-1",
-            name: "echo",
-            arguments: { text: "hello" },
+    const [settled] = resultsOnly(
+      await drain(
+        executeToolCalls(
+          baseInput({
+            toolkit,
+            calls: [
+              toolCallPart({
+                toolCallId: "call-1",
+                name: "echo",
+                arguments: { text: "hello" },
+              }),
+            ],
           }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        ),
       ),
     )
 
-    expect(result.resultParts[0]).toMatchObject({
-      type: MessageType.ToolResult,
-      content: "echo:hello",
-    })
+    expect(settled!.content).toBe("fmt:hello")
+    expect(settled!.result).toEqual(ok({ echoed: "hello" }))
   })
 
   it("applies the configured maxInline to framework truncation", async () => {
@@ -114,36 +117,32 @@ describe("@ronde/engine executeToolCalls", () => {
     })
 
     const workspace = new TestWorkspace()
-    const result = await drainTool(
-      executeToolCalls(
-        [toolCallPart({ toolCallId: "call-1", name: "big", arguments: {} })],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        workspace,
-        new TestJournal(),
-        50,
+    const [settled] = resultsOnly(
+      await drain(
+        executeToolCalls(
+          baseInput({
+            toolkit,
+            workspace,
+            maxInline: 50,
+            calls: [
+              toolCallPart({
+                toolCallId: "call-1",
+                name: "big",
+                arguments: {},
+              }),
+            ],
+          }),
+        ),
       ),
     )
 
-    const content = (result.resultParts[0] as { content: string }).content
-    // Head slice of 50 "x"s, marker, hint — total well under 200.
-    expect(content.startsWith("x".repeat(50))).toBe(true)
-    expect(content).toContain("150 characters truncated")
-    expect(content).toContain("[Full output at memory://spill/1")
+    expect(settled!.content.startsWith("x".repeat(50))).toBe(true)
+    expect(settled!.content).toContain("150 characters truncated")
+    expect(settled!.content).toContain("[Full output at memory://spill/1")
     expect(workspace.spills).toHaveLength(1)
   })
 
-  it("returns tool_result events in completion order", async () => {
+  it("yields tool_result events in completion order", async () => {
     const toolkit = tool<TestWorkspace>()({
       name: "wait",
       description: "Wait",
@@ -155,42 +154,27 @@ describe("@ronde/engine executeToolCalls", () => {
       format: (data) => (data as { label: string }).label,
     })
 
-    const result = await drainTool(
+    const events = await drain(
       executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "slow",
-            name: "wait",
-            arguments: { label: "slow", delay: 20 },
-          }),
-          toolCallPart({
-            toolCallId: "fast",
-            name: "wait",
-            arguments: { label: "fast", delay: 1 },
-          }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        baseInput({
+          toolkit,
+          calls: [
+            toolCallPart({
+              toolCallId: "slow",
+              name: "wait",
+              arguments: { label: "slow", delay: 20 },
+            }),
+            toolCallPart({
+              toolCallId: "fast",
+              name: "wait",
+              arguments: { label: "fast", delay: 1 },
+            }),
+          ],
+        }),
       ),
     )
 
-    expect(
-      result.events
-        .filter((event) => event.type === "tool_result")
-        .map((event) => event.result.content),
-    ).toEqual(["fast", "slow"])
+    expect(resultsOnly(events).map((e) => e.content)).toEqual(["fast", "slow"])
   })
 
   it("respects approval decisions before execution", async () => {
@@ -201,36 +185,26 @@ describe("@ronde/engine executeToolCalls", () => {
       execute: async (args) => ok(args.text),
     })
 
-    const result = await drainTool(
-      executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "call-1",
-            name: "echo",
-            arguments: { text: "hello" },
+    const [settled] = resultsOnly(
+      await drain(
+        executeToolCalls(
+          baseInput({
+            toolkit,
+            approvals: new Map([[0, false]]),
+            calls: [
+              toolCallPart({
+                toolCallId: "call-1",
+                name: "echo",
+                arguments: { text: "hello" },
+              }),
+            ],
           }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map([[0, false]]),
-        new TestWorkspace(),
-        new TestJournal(),
+        ),
       ),
     )
 
-    expect(result.resultParts[0]).toMatchObject({
-      ok: false,
-      content: 'Tool call "echo" was rejected',
-    })
+    expect(settled!.result.ok).toBe(false)
+    expect(settled!.content).toBe('Tool call "echo" was rejected')
   })
 
   it("does not abort siblings when a tool returns err()", async () => {
@@ -241,42 +215,31 @@ describe("@ronde/engine executeToolCalls", () => {
       execute: async (args) => (args.ok ? ok("ok") : err("bad")),
     })
 
-    const result = await drainTool(
-      executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "call-1",
-            name: "maybe",
-            arguments: { ok: false },
+    const results = resultsOnly(
+      await drain(
+        executeToolCalls(
+          baseInput({
+            toolkit,
+            calls: [
+              toolCallPart({
+                toolCallId: "call-1",
+                name: "maybe",
+                arguments: { ok: false },
+              }),
+              toolCallPart({
+                toolCallId: "call-2",
+                name: "maybe",
+                arguments: { ok: true },
+              }),
+            ],
           }),
-          toolCallPart({
-            toolCallId: "call-2",
-            name: "maybe",
-            arguments: { ok: true },
-          }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        ),
       ),
     )
 
-    expect(
-      result.resultParts.map((part) =>
-        part.type === MessageType.ToolResult ? part.ok : undefined,
-      ),
-    ).toEqual([false, true])
+    const byId = new Map(results.map((r) => [r.call.toolUseId, r.result.ok]))
+    expect(byId.get("call-1")).toBe(false)
+    expect(byId.get("call-2")).toBe(true)
   })
 
   it("aborts sibling tools when one execute() call throws", async () => {
@@ -302,48 +265,34 @@ describe("@ronde/engine executeToolCalls", () => {
       format: () => "done",
     })
 
-    const result = await drainTool(
-      executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "bomb-1",
-            name: "bomb",
-            arguments: {},
+    const results = resultsOnly(
+      await drain(
+        executeToolCalls(
+          baseInput({
+            toolkit: merge(bomb, slow),
+            calls: [
+              toolCallPart({
+                toolCallId: "bomb-1",
+                name: "bomb",
+                arguments: {},
+              }),
+              toolCallPart({
+                toolCallId: "slow-1",
+                name: "slow",
+                arguments: {},
+              }),
+            ],
           }),
-          toolCallPart({
-            toolCallId: "slow-1",
-            name: "slow",
-            arguments: {},
-          }),
-        ],
-        merge(bomb, slow),
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        ),
       ),
     )
 
     expect(execution).toContain("slow:aborted")
-    expect(
-      result.resultParts.map((part) =>
-        part.type === MessageType.ToolResult ? part.ok : undefined,
-      ),
-    ).toEqual([false, true])
+    const byId = new Map(results.map((r) => [r.call.toolUseId, r.result.ok]))
+    expect(byId.get("bomb-1")).toBe(false)
+    expect(byId.get("slow-1")).toBe(true)
   })
 
-  // The slow tool only resolves after the consumer observes fast's
-  // tool_result. If events were buffered, slow would deadlock and
-  // the vitest timeout would trip.
   it("streams tool_result events as each tool settles", async () => {
     let unblock: (() => void) | null = null
     const fastResultObserved = new Promise<void>((resolve) => {
@@ -371,24 +320,13 @@ describe("@ronde/engine executeToolCalls", () => {
     )
 
     const gen = executeToolCalls(
-      [
-        toolCallPart({ toolCallId: "fast-1", name: "fast", arguments: {} }),
-        toolCallPart({ toolCallId: "slow-1", name: "slow", arguments: {} }),
-      ],
-      toolkit,
-      {
-        turn: 1,
-        reasoning: [],
-        toolCalls: [],
-        usage: emptyUsage(),
-        stopReason: StopReason.Unknown,
-      },
-      1,
-      new AbortController().signal,
-      [],
-      new Map(),
-      new TestWorkspace(),
-      new TestJournal(),
+      baseInput({
+        toolkit,
+        calls: [
+          toolCallPart({ toolCallId: "fast-1", name: "fast", arguments: {} }),
+          toolCallPart({ toolCallId: "slow-1", name: "slow", arguments: {} }),
+        ],
+      }),
     )
 
     const types: string[] = []
@@ -429,40 +367,29 @@ describe("@ronde/engine executeToolCalls", () => {
       format: (data) => data as string,
     })
 
-    const result = await drainTool(
+    const events = await drain(
       executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "s-1",
-            name: "streamer",
-            arguments: {},
-          }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        baseInput({
+          toolkit,
+          calls: [
+            toolCallPart({
+              toolCallId: "s-1",
+              name: "streamer",
+              arguments: {},
+            }),
+          ],
+        }),
       ),
     )
 
-    expect(result.events.map((e) => e.type)).toEqual([
+    expect(events.map((e) => e.type)).toEqual([
       "tool_call",
       "tool_delta",
       "tool_delta",
       "tool_delta",
       "tool_result",
     ])
-    const chunks = result.events.flatMap((e) =>
+    const chunks = events.flatMap((e) =>
       e.type === "tool_delta" ? [e.chunk] : [],
     )
     expect(chunks).toEqual(["chunk-1", "chunk-2", "chunk-3"])
@@ -494,131 +421,133 @@ describe("@ronde/engine executeToolCalls", () => {
       }),
     )
 
-    const result = await drainTool(
+    const events = await drain(
       executeToolCalls(
-        [
-          toolCallPart({ toolCallId: "a", name: "A", arguments: {} }),
-          toolCallPart({ toolCallId: "b", name: "B", arguments: {} }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        baseInput({
+          toolkit,
+          calls: [
+            toolCallPart({ toolCallId: "a", name: "A", arguments: {} }),
+            toolCallPart({ toolCallId: "b", name: "B", arguments: {} }),
+          ],
+        }),
       ),
     )
 
-    expect(result.events.slice(0, 2).map((e) => e.type)).toEqual([
+    expect(events.slice(0, 2).map((e) => e.type)).toEqual([
       "tool_call",
       "tool_call",
     ])
 
-    // Cross-tool arrival order is non-deterministic with no barriers —
-    // only per-tool order is asserted.
     const deltasFor = (id: string) =>
-      result.events.flatMap((e) =>
+      events.flatMap((e) =>
         e.type === "tool_delta" && e.call.toolUseId === id ? [e.chunk] : [],
       )
     expect(deltasFor("a")).toEqual(["a1", "a2"])
     expect(deltasFor("b")).toEqual(["b1", "b2"])
-
-    for (const id of ["a", "b"]) {
-      const own = result.events.filter(
-        (e) =>
-          (e.type === "tool_delta" || e.type === "tool_result") &&
-          e.call.toolUseId === id,
-      )
-      const resultIdx = own.findIndex((e) => e.type === "tool_result")
-      expect(resultIdx).toBe(own.length - 1)
-    }
   })
 })
 
-describe("@ronde/engine executeToolCalls — token estimation", () => {
-  it("estimates tokens conservatively across prose, JSON, and dense strings", async () => {
+describe("@ronde/engine executeToolCalls — cancellation", () => {
+  it("synthesizes Cancelled for tools not yet launched when abort fires", async () => {
+    const ac = new AbortController()
     const toolkit = tool<TestWorkspace>()({
-      name: "echo",
-      description: "Echo",
-      parameters: z.object({ text: z.string() }),
-      execute: async (args) => ok({ echoed: args.text }),
-      format: (data) => JSON.stringify(data),
-    })
-
-    const result = await drainTool(
-      executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "call-1",
-            name: "echo",
-            arguments: { text: "dense-text" },
-          }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
-      ),
-    )
-
-    expect(result.estimatedTokens).toBeGreaterThan(0)
-  })
-
-  it("falls back safely on unserializable values during token estimation", async () => {
-    const cyclic: Record<string, unknown> = {}
-    cyclic["self"] = cyclic
-
-    const toolkit = tool<TestWorkspace>()({
-      name: "echo",
-      description: "Echo",
+      name: "noop",
+      description: "noop",
       parameters: z.object({}),
       execute: async () => ok("done"),
+      format: (d) => d as string,
     })
+    ac.abort("external")
 
-    const result = await drainTool(
-      executeToolCalls(
-        [
-          toolCallPart({
-            toolCallId: "call-1",
-            name: "echo",
-            arguments: cyclic,
+    const results = resultsOnly(
+      await drain(
+        executeToolCalls(
+          baseInput({
+            toolkit,
+            abort: ac.signal,
+            calls: [
+              toolCallPart({ toolCallId: "a", name: "noop", arguments: {} }),
+              toolCallPart({ toolCallId: "b", name: "noop", arguments: {} }),
+            ],
           }),
-        ],
-        toolkit,
-        {
-          turn: 1,
-          reasoning: [],
-          toolCalls: [],
-          usage: emptyUsage(),
-          stopReason: StopReason.Unknown,
-        },
-        1,
-        new AbortController().signal,
-        [],
-        new Map(),
-        new TestWorkspace(),
-        new TestJournal(),
+        ),
       ),
     )
 
-    expect(result.estimatedTokens).toBeGreaterThan(0)
+    expect(results.map((r) => r.result.ok)).toEqual([false, false])
+    expect(results.map((r) => r.content)).toEqual(["Cancelled", "Cancelled"])
+  })
+
+  it("synthesizes Cancelled for tools interrupted mid-execution", async () => {
+    const ac = new AbortController()
+    const toolkit = tool<TestWorkspace>()({
+      name: "hang",
+      description: "hangs forever",
+      parameters: z.object({}),
+      execute: () =>
+        new Promise<never>(() => {
+          // never resolves — only abort unsticks this
+        }),
+      format: (d) => d as string,
+    })
+
+    const gen = executeToolCalls(
+      baseInput({
+        toolkit,
+        abort: ac.signal,
+        calls: [toolCallPart({ toolCallId: "a", name: "hang", arguments: {} })],
+      }),
+    )
+
+    const events: EngineEvent[] = []
+    const iter = (async () => {
+      let next = await gen.next()
+      while (!next.done) {
+        events.push(next.value)
+        next = await gen.next()
+      }
+    })()
+
+    await new Promise((r) => setTimeout(r, 10))
+    ac.abort("external")
+    await iter
+
+    const results = resultsOnly(events)
+    expect(results).toHaveLength(1)
+    expect(results[0]!.result.ok).toBe(false)
+    expect(results[0]!.content).toBe("Cancelled")
+  })
+
+  it("falls back to best-effort content if the formatter throws", async () => {
+    const toolkit = tool<TestWorkspace>()({
+      name: "boom-format",
+      description: "format throws",
+      parameters: z.object({}),
+      execute: async () => ok("anything"),
+      format: () => {
+        throw new Error("format failed")
+      },
+    })
+
+    const [settled] = resultsOnly(
+      await drain(
+        executeToolCalls(
+          baseInput({
+            toolkit,
+            calls: [
+              toolCallPart({
+                toolCallId: "a",
+                name: "boom-format",
+                arguments: {},
+              }),
+            ],
+          }),
+        ),
+      ),
+    )
+
+    expect(settled!.result.ok).toBe(false)
+    expect(settled!.content).toContain("Formatter failed")
+    expect(settled!.content).toContain("format failed")
   })
 })

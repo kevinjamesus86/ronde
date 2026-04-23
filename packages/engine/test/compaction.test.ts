@@ -300,6 +300,99 @@ describe("@ronde/engine buffered-turn compaction", () => {
     ).toBe(true)
   })
 
+  it("per-pair budget — commits pairs that fit, buffers the excess", async () => {
+    const big = tool()({
+      name: "big",
+      description: "returns a large payload",
+      parameters: z.object({ size: z.number() }),
+      execute: async (args) => ok("x".repeat(args.size)),
+    })
+
+    // Two tool calls in one response. Default usage has inputTokens=100,
+    // outputTokens=30 → runningEstimate starts at 130.
+    // compactSafetyMargin clamps to 4000.
+    //
+    //  - "small" adds ~5 tokens → 130+5+4000 = 4135 < maxContext (5000) → commits
+    //  - "huge"  adds ~700 tokens → 135+700+4000 = 4835 ≥ maxContext (5000)? No,
+    //    still under. Bump "huge" to ~2000 chars to push over: 135+~667+4000>5000 ✗
+    //    Use size 3000 to be safe: estimated tokens >= 1000.
+    const backend = mockHandler(
+      (_request, call) => {
+        if (call === 0) {
+          return {
+            messages: [
+              {
+                parts: [
+                  {
+                    type: MessageType.ToolUse as const,
+                    toolCallId: "t-small",
+                    name: "big",
+                    arguments: { size: 1 },
+                  },
+                  {
+                    type: MessageType.ToolUse as const,
+                    toolCallId: "t-huge",
+                    name: "big",
+                    arguments: { size: 3000 },
+                  },
+                ],
+              },
+            ],
+            stopReason: StopReason.ToolUse,
+            usage: { ...emptyUsage(), inputTokens: 100, outputTokens: 30 },
+            providerMeta: null,
+            warnings: [],
+          }
+        }
+        return textResponse("done")
+      },
+      { config: { maxContext: 5000, maxOutput: 200 } },
+    )
+
+    const { journal } = await driveEngine(backend, {
+      prompt: "go",
+      toolkit: big,
+      compaction: {
+        async compact() {
+          return {
+            kind: "compacted" as const,
+            summary: userMessage("summary"),
+            deferred: [],
+            usage: emptyUsage(),
+          }
+        },
+      },
+    })
+
+    // The small pair was committed via send() before compaction, so it
+    // lands in the archived slice as a real tool-use + tool-result
+    // message (not as translated text). The archive contains the
+    // prompt plus that one pair.
+    const archivedMessages = journal.archived[0]!.events.filter(
+      (ev) => ev.type === "message",
+    ).map((ev) => ev.message)
+    const archivedToolUses = archivedMessages.flatMap((m) =>
+      m.parts.filter((p) => p.type === MessageType.ToolUse),
+    )
+    expect(archivedToolUses.map((p) => p.toolCallId)).toEqual(["t-small"])
+
+    // The huge pair was buffered and replayed as translated text in
+    // the new active slice — the next turn's request sees exactly
+    // the huge pair's translation, not the small one (which is
+    // already covered by the summary).
+    const nextRequest = backend.requests[1]?.messages ?? []
+    expect(nextRequest[0]).toEqual(userMessage("summary"))
+    const translatedIds = nextRequest
+      .slice(1)
+      .flatMap((m) => m.parts)
+      .flatMap((p) =>
+        p.type === MessageType.Text
+          ? [...p.content.matchAll(/id: (\S+)/g)].map((m) => m[1]!)
+          : [],
+      )
+    expect(translatedIds).toEqual(["t-huge", "t-huge"])
+  })
+
   it("drops provider-specific reasoning artifacts from buffered replay", async () => {
     const backend = mockHandler(
       (_request, call) => {
@@ -709,17 +802,18 @@ describe("@ronde/engine Path B compaction boundaries", () => {
     })
 
     // Exactly one partition with reason "compaction", carrying the
-    // turn-1 slice: prompt, tool-pair, turn_end, plus the
-    // compaction_start/end bracket (those are durable events that
-    // happen before the partition call, so they ride along into the
-    // archive).
+    // turn-1 slice: prompt, turn_end, plus the compaction_start/end
+    // bracket. The tool pair itself is NOT in the archive — once
+    // preemptive compaction trips, the current turn's pairs are
+    // buffered in memory and replayed as translated text in the new
+    // active slice instead of being durably written pre-partition.
     expect(journal.archived).toHaveLength(1)
     expect(journal.archived[0]?.reason).toBe("compaction")
     const archivedTypes = journal.archived[0]!.events.map((ev) => ev.type)
     expect(archivedTypes).toContain("turn_end")
-    expect(
-      archivedTypes.filter((t) => t === "message").length,
-    ).toBeGreaterThanOrEqual(2)
+    expect(archivedTypes).toContain("compaction_start")
+    expect(archivedTypes).toContain("compaction_end")
+    expect(archivedTypes.filter((t) => t === "message")).toHaveLength(1)
 
     // The active slice after partition starts with the summary then
     // the translated tool-result buffer. The second turn's text +

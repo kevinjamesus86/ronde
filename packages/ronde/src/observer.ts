@@ -1,4 +1,5 @@
-import type { ToolCall, ToolResult } from "@ronde/core/tool"
+import type { ToolCall } from "@ronde/core/tool"
+import type { ToolResult } from "@ronde/core/toolkit"
 import type { UsageStats } from "@ronde/core/completion"
 import type { AgentStep, EngineEvent, EngineResult } from "@ronde/engine"
 
@@ -13,7 +14,12 @@ export interface RunObserver {
   onToolCall?(turn: number, toolCall: ToolCall): void
   onToolDelta?(turn: number, toolCall: ToolCall, chunk: string): void
   onToolInputDelta?(turn: number, toolCallId: string, chunk: string): void
-  onToolResult?(turn: number, toolCall: ToolCall, result: ToolResult): void
+  onToolResult?(
+    turn: number,
+    toolCall: ToolCall,
+    content: string,
+    result: ToolResult,
+  ): void
   onCompactionStart?(turn: number, historyLength: number): void
   onCompactionEnd?(turn: number, usage: UsageStats): void
   onCutoff?(turn: number, consecutiveCount: number): void
@@ -55,7 +61,7 @@ export function dispatch(event: EngineEvent, observers: RunObserver[]): void {
       break
     case "tool_result":
       notify(observers, (o) =>
-        o.onToolResult?.(event.turn, event.call, event.result),
+        o.onToolResult?.(event.turn, event.call, event.content, event.result),
       )
       break
 

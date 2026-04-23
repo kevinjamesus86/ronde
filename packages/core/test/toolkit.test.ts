@@ -4,7 +4,7 @@ import { err } from "@ronde/core/result"
 import {
   bindToolkitRuntime,
   defaultFormatter,
-  formatToolOutput,
+  formatToolResult,
   merge,
   tool,
   type ToolContext,
@@ -19,7 +19,7 @@ import {
 } from "@ronde/core/workspace"
 import { ok } from "@ronde/core/result"
 
-describe("@ronde/core formatToolOutput", () => {
+describe("@ronde/core formatToolResult", () => {
   it("preserves err data when a formatter is registered", async () => {
     const toolkit: Toolkit = {
       schemas: [],
@@ -31,7 +31,7 @@ describe("@ronde/core formatToolOutput", () => {
       },
     }
 
-    const output = await formatToolOutput(
+    const output = await formatToolResult(
       toolkit,
       "shell",
       err("Command failed with exit code 1", {
@@ -54,7 +54,7 @@ describe("@ronde/core formatToolOutput", () => {
     })
 
     expect(
-      await formatToolOutput(toolkit, "greet", ok({ name: "world" })),
+      await formatToolResult(toolkit, "greet", ok({ name: "world" })),
     ).toBe("Hello, world!")
   })
 
@@ -67,7 +67,7 @@ describe("@ronde/core formatToolOutput", () => {
       formatters: {},
     }
 
-    expect(await formatToolOutput(toolkit, "echo", ok({ answer: 42 }))).toBe(
+    expect(await formatToolResult(toolkit, "echo", ok({ answer: 42 }))).toBe(
       '{"answer":42}',
     )
   })
@@ -81,11 +81,11 @@ describe("@ronde/core formatToolOutput", () => {
       format: () => "not used",
     })
 
-    expect(await formatToolOutput(toolkit, "noop", err("boom"))).toBe("boom")
+    expect(await formatToolResult(toolkit, "noop", err("boom"))).toBe("boom")
   })
 })
 
-describe("@ronde/core formatToolOutput framework truncation", () => {
+describe("@ronde/core formatToolResult framework truncation", () => {
   class RecordingWorkspace extends Workspace {
     readonly id = "recording"
     readonly kind = "recording"
@@ -118,7 +118,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
   it("no-ops when output fits the inline budget", async () => {
     const workspace = new RecordingWorkspace()
     const toolkit = makeToolkit("echo")
-    const out = await formatToolOutput(
+    const out = await formatToolResult(
       toolkit,
       "echo",
       ok({ text: "small payload" }),
@@ -133,7 +133,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     const workspace = new RecordingWorkspace()
     const toolkit = makeToolkit("echo")
     const big = "x".repeat(50) + "y".repeat(50)
-    const out = await formatToolOutput(toolkit, "echo", ok({ text: big }), {
+    const out = await formatToolResult(toolkit, "echo", ok({ text: big }), {
       workspace,
       toolUseId: "call-1",
       maxInline: 30,
@@ -153,7 +153,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     const workspace = new RecordingWorkspace()
     const toolkit = makeToolkit("shell", "tail")
     const big = "x".repeat(50) + "y".repeat(50)
-    const out = await formatToolOutput(toolkit, "shell", ok({ text: big }), {
+    const out = await formatToolResult(toolkit, "shell", ok({ text: big }), {
       workspace,
       toolUseId: "call-2",
       maxInline: 30,
@@ -168,7 +168,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     const workspace = new RecordingWorkspace()
     const toolkit = makeToolkit("grep", "middle")
     const big = "h".repeat(50) + "m".repeat(50) + "t".repeat(50)
-    const out = await formatToolOutput(toolkit, "grep", ok({ text: big }), {
+    const out = await formatToolResult(toolkit, "grep", ok({ text: big }), {
       workspace,
       toolUseId: "call-3",
       maxInline: 40,
@@ -184,7 +184,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
   it("omits tool-name references from the spill hint", async () => {
     const workspace = new RecordingWorkspace()
     const toolkit = makeToolkit("shell")
-    const out = await formatToolOutput(
+    const out = await formatToolResult(
       toolkit,
       "shell",
       ok({ text: "x".repeat(100) }),
@@ -202,7 +202,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     // Newline at index 10. Exact cut at size=15 lands inside 'm' block;
     // snap walks back to the \n, yielding an 11-char head ending on \n.
     const content = "h".repeat(10) + "\n" + "m".repeat(90)
-    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+    const out = await formatToolResult(toolkit, "echo", ok({ text: content }), {
       workspace,
       toolUseId: "call-snap-head",
       maxInline: 15,
@@ -219,7 +219,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     // Exact tail start at index 86 lands mid-'m'. Snap forward to the
     // \n at index 90, giving a 10-char 't' slice after the cut.
     const content = "m".repeat(90) + "\n" + "t".repeat(10)
-    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+    const out = await formatToolResult(toolkit, "echo", ok({ text: content }), {
       workspace,
       toolUseId: "call-snap-tail",
       maxInline: 15,
@@ -242,7 +242,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     // next \n at 81 → cut 82. Slice: "h"*10 + "\n", marker, "t"*10.
     const content =
       "h".repeat(10) + "\n" + "m".repeat(70) + "\n" + "t".repeat(10)
-    const out = await formatToolOutput(
+    const out = await formatToolResult(
       toolkit,
       "shell",
       ok({ text: content }),
@@ -265,7 +265,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     const toolkit = makeToolkit("echo")
     // Single long line, no newlines anywhere.
     const content = "x".repeat(1000)
-    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+    const out = await formatToolResult(toolkit, "echo", ok({ text: content }), {
       workspace,
       toolUseId: "call-no-snap",
       maxInline: 100,
@@ -282,7 +282,7 @@ describe("@ronde/core formatToolOutput framework truncation", () => {
     // With maxInline=100, the exact cut is at index 100. The newline
     // at index 500 is far outside [100-200, 100], so no snap applies.
     const content = "x".repeat(500) + "\n" + "x".repeat(500)
-    const out = await formatToolOutput(toolkit, "echo", ok({ text: content }), {
+    const out = await formatToolResult(toolkit, "echo", ok({ text: content }), {
       workspace,
       toolUseId: "call-bounded",
       maxInline: 100,

@@ -111,7 +111,7 @@ describe("@ronde/providers anthropic backend", () => {
   })
 
   it("projects pair-message canonical history into batched anthropic shape", () => {
-    // Two pair messages — the canonical form executeToolCalls writes for a
+    // Two pair messages — the canonical form the engine journals for a
     // parallel two-tool turn. Wire shape must keep both tool_uses in one
     // assistant turn and both tool_results in one user turn so thinking
     // signatures stay attached and the model sees the original inference.

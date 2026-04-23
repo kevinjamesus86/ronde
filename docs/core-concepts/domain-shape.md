@@ -413,9 +413,12 @@ Owns turn-loop mechanics:
 
 - replay
 - tool-use cycle
-- tool-pair durability: each completed tool journals as one canonical
+- tool-pair durability: a committed tool pair journals as one canonical
   `Message { parts: [ToolCallPart, ToolResultPart] }`, which is the
-  atomic unit — a `tool_use` never lands durably without its result
+  atomic unit — a `tool_use` never lands durably without its result.
+  Per-pair budget sizing may buffer some pairs for preemptive compaction
+  instead of journaling them as pairs; buffered pairs replay as
+  translated text post-partition.
 - step aggregation
 - settle reason
 - event emission

@@ -8,7 +8,7 @@ import {
   type PathSpillResult,
   type SpillOpts,
 } from "@ronde/core/workspace"
-import type { Toolkit, ToolOutput } from "@ronde/core/toolkit"
+import type { Toolkit, ToolResult } from "@ronde/core/toolkit"
 import type { ToolCall } from "@ronde/core/tool"
 import { drain } from "@ronde/core/stream"
 
@@ -79,7 +79,7 @@ export async function execTool<D = unknown>(
   name: string,
   args: Record<string, unknown>,
   workspace: Workspace,
-): Promise<ToolOutput<D>> {
+): Promise<ToolResult<D>> {
   const abort = new AbortController()
   const call: ToolCall = {
     toolUseId: "toolu_1",
@@ -95,5 +95,5 @@ export async function execTool<D = unknown>(
       workspace,
       call,
     }),
-  ) as Promise<ToolOutput<D>>
+  ) as Promise<ToolResult<D>>
 }

@@ -9,8 +9,8 @@ import type {
 export type { SettleReason } from "@ronde/core/completion"
 import type { Message } from "@ronde/core/message"
 import type { Awaitable, Lax } from "@ronde/core"
-import type { ToolCall, ToolResult } from "@ronde/core/tool"
-import type { Toolkit, ToolOutput } from "@ronde/core/toolkit"
+import type { ToolCall } from "@ronde/core/tool"
+import type { Toolkit, ToolResult } from "@ronde/core/toolkit"
 import type { Workspace } from "@ronde/core/workspace"
 import type { CompactionStrategy } from "./compaction.js"
 
@@ -84,7 +84,10 @@ export interface AgentStepToolCall {
   id: string
   name: string
   args: Record<string, unknown>
-  output: ToolOutput
+  /** Formatted content the model saw — same string as the tool_result part. */
+  content: string
+  /** Raw structured exec return, `ok(data)` or `err(msg)`. Trajectory only — never journaled. */
+  result: ToolResult
 }
 
 export interface AgentStep {
@@ -115,7 +118,14 @@ export type ProgressEvents = {
   tool_call: { turn: number; call: ToolCall }
   tool_delta: { turn: number; call: ToolCall; chunk: string }
   tool_input_delta: { turn: number; toolCallId: string; chunk: string }
-  tool_result: { turn: number; call: ToolCall; result: ToolResult }
+  tool_result: {
+    turn: number
+    call: ToolCall
+    /** Formatted string the model sees — journaled as the ToolResultPart content. */
+    content: string
+    /** Raw structured exec return. Never journaled. */
+    result: ToolResult
+  }
 }
 
 export type DiagnosticEvents = {
