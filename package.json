@@ -1,6 +1,6 @@
 {
   "name": "ronde",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Agentic loop framework with multi-provider completions, composable toolkits, and structured observability",
   "license": "Apache-2.0",
@@ -52,7 +52,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "@google/genai": "^1.50.1",
-    "@ronde/lock": "0.6.0",
+    "@ronde/lock": "0.7.0",
     "ignore": "^7.0.5",
     "openai": "^6",
     "tinyglobby": "^0.2.16",

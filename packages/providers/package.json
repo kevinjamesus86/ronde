@@ -1,6 +1,6 @@
 {
   "name": "@ronde/providers",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
@@ -19,8 +19,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "@google/genai": "^1.50.1",
-    "@ronde/backend": "0.6.0",
-    "@ronde/core": "0.6.0",
+    "@ronde/backend": "0.7.0",
+    "@ronde/core": "0.7.0",
     "openai": "^6"
   }
 }
