@@ -80,6 +80,7 @@ type AiSdkAssistantPart = Extract<
 
 function convertMessages(messages: Message[]): AiSdkMessage[] {
   const out: AiSdkMessage[] = []
+  const toolNamesById = new Map<string, string>()
 
   // AI SDK expects role at message level; canonical messages carry role on
   // parts. Bucket parts by effective role and coalesce adjacent same-role
@@ -165,6 +166,7 @@ function convertMessages(messages: Message[]): AiSdkMessage[] {
           slot.parts.push({ type: "reasoning", text: part.content })
         }
       } else if (part.type === MessageType.ToolUse) {
+        toolNamesById.set(part.toolCallId, part.name)
         const slot = ensure("assistant")
         if (slot?.kind === "assistant") {
           slot.parts.push({
@@ -180,7 +182,7 @@ function convertMessages(messages: Message[]): AiSdkMessage[] {
           slot.toolResults.push({
             type: "tool-result",
             toolCallId: part.toolCallId,
-            toolName: part.toolCallId,
+            toolName: toolNamesById.get(part.toolCallId) ?? part.toolCallId,
             output: part.ok
               ? { type: "text", value: part.content }
               : { type: "error-text", value: part.content },

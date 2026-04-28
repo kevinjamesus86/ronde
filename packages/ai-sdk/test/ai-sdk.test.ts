@@ -6,6 +6,8 @@ import {
   assistantMessage,
   textPart,
   thinkingPart,
+  toolCallPart,
+  toolResultPart,
   userMessage,
 } from "@ronde/core"
 import { DEFAULT_MAX_CONTEXT, DEFAULT_MAX_OUTPUT } from "@ronde/backend"
@@ -211,6 +213,70 @@ describe("@ronde/ai-sdk request conversion", () => {
     expect(calls[0]!.prompt[0].content).toContainEqual({
       type: "reasoning",
       text: "reasoning",
+    })
+  })
+
+  it("preserves tool names when serializing prior tool results", async () => {
+    const calls: any[] = []
+    const backend = fromAiSdk(
+      mockAiSdkModel((options) => {
+        calls.push(options)
+        return {
+          content: [{ type: "text", text: "ok" }],
+          finishReason: { unified: "stop" },
+          usage: {
+            inputTokens: { total: 1 },
+            outputTokens: { total: 1 },
+          },
+          warnings: [],
+        }
+      }),
+    )
+
+    await drain(
+      backend.complete({
+        model: "test",
+        messages: [
+          userMessage("search for x"),
+          assistantMessage([
+            toolCallPart({
+              toolCallId: "call_1",
+              name: "search",
+              arguments: { q: "x" },
+            }),
+            toolResultPart({
+              toolCallId: "call_1",
+              ok: true,
+              content: "result text",
+            }),
+          ]),
+        ],
+        tools: [],
+        maxOutput: 100,
+      }),
+    )
+
+    expect(calls[0]!.prompt).toContainEqual({
+      role: "assistant",
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "call_1",
+          toolName: "search",
+          input: { q: "x" },
+        },
+      ],
+    })
+    expect(calls[0]!.prompt).toContainEqual({
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "call_1",
+          toolName: "search",
+          output: { type: "text", value: "result text" },
+        },
+      ],
     })
   })
 
