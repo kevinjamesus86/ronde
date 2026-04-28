@@ -44,10 +44,10 @@ Which packages run where. Platform-agnostic packages must not import `node:*`, r
 | `@ronde/mem`       |    ✓     |    ✓    |       ✓        | platform-agnostic                                                                                                                                                             |
 | `@ronde/ai-sdk`    |    ✓     |    ✓    |       ✓        | peer dep `@ai-sdk/provider`                                                                                                                                                   |
 | `@ronde/providers` |    ✓     |    ✓    |     ✓ / ?      | browser-safe for OpenAI + Anthropic + Gemini (auto-enabled); llamacpp inherits OpenAI. Non-Node runtimes must pass `apiKey` explicitly — env-var fallback needs `process.env` |
-| `@ronde/tools`     |    ✓     |    ✗    |       ✗        | first-party tools use `node:fs`, `node:child_process`                                                                                                                         |
+| `@ronde/tools`     |    ✓     |    ✗    |       ✗        | first-party tools use `node:fs`, `node:child_process`; shell sandbox enforcement is macOS-only (`sandbox-exec`), other Node platforms warn once and run unsandboxed           |
 | `@ronde/fs`        |    ✓     |    ✗    |       ✗        | concrete fs runtime — `node:fs`, `node:path`                                                                                                                                  |
 | `@ronde/lock`      |    ✓     |    ✗    |       ✗        | native addon (darwin-arm64, linux-x64-gnu)                                                                                                                                    |
-| `ronde` (root)     |    ✓     |    ✗    |       ✗        | bundles `@ronde/fs` + `@ronde/tools` for the managed default                                                                                                                  |
+| `ronde` (root)     |    ✓     |    ✗    |       ✗        | bundles `@ronde/fs` + `@ronde/tools` for the managed default; full shell sandbox enforcement currently requires macOS                                                         |
 
 When editing a platform-agnostic package, grep for the banned patterns before committing:
 

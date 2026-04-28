@@ -3,7 +3,13 @@ import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { PathContext } from "../src/context.js"
-import { shell } from "../src/shell.js"
+import {
+  resolveRuntimeShell,
+  resolveShellLaunch,
+  shell,
+  shellSnapshotLine,
+  type RuntimeShell,
+} from "../src/shell.js"
 import type { ShellData } from "../src/types.js"
 import { execTool, TestDirectoryWorkspace, useTmp } from "./support.js"
 
@@ -11,7 +17,116 @@ const tmp = useTmp()
 
 afterEach(() => tmp.cleanup())
 
+const zshShell: RuntimeShell = { kind: "zsh", command: "zsh" }
+const bashShell: RuntimeShell = { kind: "bash", command: "/bin/bash" }
+const shShell: RuntimeShell = { kind: "sh", command: "/bin/sh" }
+
 describe("@ronde/tools shell", () => {
+  it("uses sandbox-exec for sandboxed launches on macOS", () => {
+    const launch = resolveShellLaunch(
+      true,
+      "(version 1)",
+      "/tmp/script.zsh",
+      zshShell,
+      "darwin",
+    )
+
+    expect(launch).toEqual({
+      command: "sandbox-exec",
+      args: ["-p", "(version 1)", "zsh", "/tmp/script.zsh"],
+    })
+  })
+
+  it("falls back to unsandboxed zsh with a warning off macOS", () => {
+    const launch = resolveShellLaunch(
+      true,
+      "(version 1)",
+      "/tmp/script.zsh",
+      zshShell,
+      "linux",
+    )
+
+    expect(launch).toEqual({
+      command: "zsh",
+      args: ["/tmp/script.zsh"],
+      warning:
+        "ronde shell sandboxing is only enforced on macOS via sandbox-exec; " +
+        "running this shell command unsandboxed with zsh. Pass sandbox: " +
+        "false to silence this warning.",
+    })
+  })
+
+  it("runs unsandboxed without warning when sandboxing is disabled", () => {
+    const launch = resolveShellLaunch(
+      false,
+      "(version 1)",
+      "/tmp/script.zsh",
+      zshShell,
+      "linux",
+    )
+
+    expect(launch).toEqual({
+      command: "zsh",
+      args: ["/tmp/script.zsh"],
+    })
+  })
+
+  it("prefers zsh, then bash, then /bin/sh for runtime shell selection", () => {
+    const envPath = ["/zsh-bin", "/bash-bin"].join(path.delimiter)
+    const canExecute = (file: string) =>
+      file === "/zsh-bin/zsh" || file === "/bash-bin/bash"
+
+    expect(resolveRuntimeShell(envPath, canExecute)).toEqual({
+      kind: "zsh",
+      command: "/zsh-bin/zsh",
+    })
+    expect(
+      resolveRuntimeShell(envPath, (file) => file === "/bash-bin/bash"),
+    ).toEqual({
+      kind: "bash",
+      command: "/bash-bin/bash",
+    })
+    expect(resolveRuntimeShell(envPath, () => false)).toEqual(shShell)
+  })
+
+  it("uses the resolved shell command for sandbox and unsandboxed launches", () => {
+    expect(
+      resolveShellLaunch(
+        true,
+        "(version 1)",
+        "/tmp/script.bash",
+        bashShell,
+        "darwin",
+      ),
+    ).toEqual({
+      command: "sandbox-exec",
+      args: ["-p", "(version 1)", "/bin/bash", "/tmp/script.bash"],
+    })
+    expect(
+      resolveShellLaunch(
+        false,
+        "(version 1)",
+        "/tmp/script.sh",
+        shShell,
+        "linux",
+      ),
+    ).toEqual({
+      command: "/bin/sh",
+      args: ["/tmp/script.sh"],
+    })
+  })
+
+  it("sources snapshots for zsh/bash and skips them for sh", () => {
+    expect(shellSnapshotLine("/tmp/snapshot.sh", zshShell)).toBe(
+      "source '/tmp/snapshot.sh' 2>/dev/null || true\n",
+    )
+    expect(shellSnapshotLine("/tmp/snapshot.sh", bashShell)).toBe(
+      "source '/tmp/snapshot.sh' 2>/dev/null || true\n",
+    )
+    expect(shellSnapshotLine("/tmp/snapshot.sh", shShell)).toBe("")
+    expect(shellSnapshotLine(undefined, zshShell)).toBe("")
+  })
+
   it("runs commands with the configured working directory", async () => {
     const root = tmp.dir()
     const subdir = path.join(root, "subdir")
@@ -176,12 +291,17 @@ describe("@ronde/tools shell", () => {
   })
 
   it("applies a supplied snapshot so its functions are available", async () => {
+    const runtimeShell = resolveRuntimeShell()
+    if (runtimeShell.kind === "sh") {
+      return
+    }
+
     const root = tmp.dir()
     const toolkit = shell(new PathContext([root]), {
       cwd: root,
       sandbox: false,
       snapshot: {
-        kind: "zsh",
+        kind: runtimeShell.kind,
         envVars: {},
         aliases: {},
         functions: {
