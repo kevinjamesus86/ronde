@@ -31,8 +31,7 @@
       "@ronde/providers/*": ["./packages/providers/src/*.ts"],
       "@ronde/tools": ["./packages/tools/src/index.ts"],
       "@ronde/tools/*": ["./packages/tools/src/*.ts"],
-      "ronde": ["./packages/ronde/src/index.ts"],
-      "ronde/*": ["./packages/ronde/src/*.ts"]
+      "ronde": ["./packages/ronde/src/index.ts"]
     },
     "noEmit": true,
     "preserveConstEnums": true
