@@ -90,17 +90,20 @@ export const shell = (pathCtx: PathContext, opts: ShellOptions = {}) => {
   const initialCwd = opts.cwd ?? pathCtx.roots[0]!
   const sandbox = opts.sandbox ?? true
   const snapshot = opts.snapshot ?? true
+  const runtimeShell = resolveRuntimeShell()
 
   return fsTool({
     name: "shell",
     description:
-      "Executes a shell command. Working directory persists between calls." +
-      " Timeout 60s. Prefers zsh, then bash, then /bin/sh.",
+      `Executes a ${runtimeShell.kind} command and returns its output.` +
+      " The working directory persists between calls — a `cd` in one" +
+      " call affects the next. Commands must be non-interactive." +
+      " Timeout: 60s.",
     parameters,
     state: {
       init: () => ({
         cwd: initialCwd,
-        shell: resolveRuntimeShell(),
+        shell: runtimeShell,
         snapshotPath: undefined,
         snapshotWarningEmitted: false,
       }),
