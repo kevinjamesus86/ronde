@@ -27,7 +27,6 @@ export * from "@ronde/engine"
 export * from "@ronde/providers"
 export * from "@ronde/tools"
 export * from "@ronde/fs"
-export * from "@ronde/mem"
 
 // Product layer — things that only exist in the convenience package.
 export * from "./api.js"

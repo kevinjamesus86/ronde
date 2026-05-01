@@ -10,7 +10,6 @@
     "packages/backend",
     "packages/engine",
     "packages/tools",
-    "packages/mem",
     "packages/lock",
     "packages/fs",
     "packages/providers",

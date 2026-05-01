@@ -25,9 +25,8 @@ export interface ManagedRuntimeOptions {
  * Create a fresh runtime pair.
  *
  * Default (no options): returns a managed fs runtime under ronde's
- * managed layout policy. This is the batteries-included path:
- * durable by default, with explicit `@ronde/mem` opt-in for callers
- * who want ephemeral runtimes instead.
+ * managed layout policy. This is the batteries-included path —
+ * durable by default.
  */
 export async function createRuntime(
   opts: ManagedRuntimeOptions = {},

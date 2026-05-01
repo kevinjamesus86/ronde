@@ -21,7 +21,6 @@
     "@ronde/core": "0.7.0",
     "@ronde/engine": "0.7.0",
     "@ronde/fs": "0.7.0",
-    "@ronde/mem": "0.7.0",
     "@ronde/providers": "0.7.0",
     "@ronde/tools": "0.7.0",
     "zod": "^4.3.6"

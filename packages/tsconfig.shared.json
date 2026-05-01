@@ -16,7 +16,6 @@
       "@ronde/engine": ["./engine/src/index.ts"],
       "@ronde/fs": ["./fs/src/index.ts"],
       "@ronde/lock": ["./lock/index.d.ts"],
-      "@ronde/mem": ["./mem/src/index.ts"],
       "@ronde/providers": ["./providers/src/index.ts"],
       "@ronde/tools": ["./tools/src/index.ts"],
       "ronde": ["./ronde/src/index.ts"]

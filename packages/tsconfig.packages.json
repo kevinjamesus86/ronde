@@ -6,7 +6,6 @@
     { "path": "./core" },
     { "path": "./engine" },
     { "path": "./fs" },
-    { "path": "./mem" },
     { "path": "./providers" },
     { "path": "./tools" },
     { "path": "./ronde" }

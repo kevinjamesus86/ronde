@@ -43,8 +43,8 @@ The split exists to make ownership explicit.
 @ronde/lock
   → generic exclusive file-lock primitive
 
-@ronde/fs / @ronde/mem
-  → concrete runtime implementations
+@ronde/fs
+  → concrete durable runtime implementation
 
 @ronde/tools
   → first-party fs-oriented tools
@@ -89,9 +89,6 @@ packages/
   fs/
     runtime.ts      journal.ts   workspace.ts internal.ts
 
-  mem/
-    runtime.ts      journal.ts   workspace.ts
-
   tools/
     index.ts        fs-tool.ts   workspace-path.ts   ...
 
@@ -118,12 +115,12 @@ Ronde has three runtime layers:
 
 ```text
 Runtime primitive       → { journal, workspace }
-Concrete backends       → @ronde/fs, @ronde/mem
+Concrete backend        → @ronde/fs
 Managed convenience     → ronde createRuntime(...), openRuntime(...), resume(...)
 ```
 
-The primitive contract is the coherent pair. The backend packages implement
-that contract concretely. The managed helpers add policy on top: project
+The primitive contract is the coherent pair. `@ronde/fs` implements that
+contract concretely. The managed helpers add policy on top: project
 bucketing, optional naming, and "open latest" selection. Managed fs is the
 batteries-included default in `ronde`.
 
@@ -166,7 +163,7 @@ It is not responsible for:
 - provider behavior
 
 This boundary is deliberate. The first-party tools care about workspace
-capability, not whether history is fs-backed or memory-backed.
+capability, not journal-backend identity.
 
 ### Canonical messages
 
@@ -642,7 +639,7 @@ The package split is not cosmetic. It encodes responsibility:
 
 - `core` defines the contracts
 - `engine` defines the raw loop
-- `fs` and `mem` implement runtime primitives
+- `fs` implements the durable runtime primitives
 - `providers` implements official model providers
 - `backend` decorates any backend generically
 - `ronde` chooses defaults and exposes the product surface

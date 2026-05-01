@@ -8,7 +8,7 @@ The short version is:
 - `@ronde/core` defines stable contracts and vocabularies
 - `@ronde/engine` defines the raw loop over those contracts
 - `@ronde/lock` owns generic file-lock semantics
-- `@ronde/fs` and `@ronde/mem` implement runtime primitives concretely
+- `@ronde/fs` implements the durable runtime primitives concretely
 - `@ronde/providers` owns official built-in model providers
 - `@ronde/backend` owns generic behavior over any `CompletionBackend`
 - `@ronde/ai-sdk` is an opt-in adapter over Vercel AI SDK providers
@@ -132,9 +132,9 @@ It is not responsible for:
 questions: when to lock, what path to lock, and how that interacts with
 cached same-process runtime handles.
 
-### `@ronde/fs` and `@ronde/mem`
+### `@ronde/fs`
 
-These packages implement runtime primitives concretely.
+This package implements the durable runtime primitives concretely.
 
 `@ronde/fs` owns:
 
@@ -154,28 +154,9 @@ That means `@ronde/fs` owns:
 - full history trust only when `scan(...)` walks the active segment
 - reduction of append-only metadata into current fs runtime state
 
-`@ronde/mem` owns:
-
-- `MemoryJournal`
-- `MemoryWorkspace`
-- convenience helpers like `createMemRuntime()`
-
-These packages may provide convenience constructors, but they do not own
+This package may provide convenience constructors, but it does not own
 managed product policy like project bucketing, latest-runtime selection, or
 default runtime choice.
-
-Important consequence:
-
-- runtime pairs do not need to be homogeneous
-
-This is valid:
-
-```ts
-const journal = new MemoryJournal()
-const workspace = new FsWorkspace(journal.id, "./scratch")
-```
-
-History can be ephemeral while tool artifacts remain durable.
 
 ### `@ronde/providers`
 
@@ -279,7 +260,7 @@ It owns:
 
 - `agentic`, `generate`, `agenticStream`
 - managed runtime helpers
-- default runtime choice: managed fs by default, explicit `@ronde/mem` opt-in
+- default runtime choice: managed fs by default
 - product-level model parsing and convenience behavior
 - default compaction strategy
 - observer adapter over `EngineEvent`
@@ -328,10 +309,10 @@ Does not own:
 - tool-pair atomicity — that's an engine contract expressed on top of the
   journal's per-event atomicity
 
-Concrete backends (`@ronde/fs`, `@ronde/mem`) own their own recovery
-mechanisms. The abstract `Journal` contract only promises the guarantee;
-how the fs backend delivers it (e.g. tail repair) is an implementation
-detail nothing outside `@ronde/fs` should care about.
+The concrete backend (`@ronde/fs`) owns its own recovery mechanisms. The
+abstract `Journal` contract only promises the guarantee; how the fs
+backend delivers it (e.g. tail repair) is an implementation detail
+nothing outside `@ronde/fs` should care about.
 
 ### `Workspace`
 
@@ -506,10 +487,10 @@ It only consumes:
 - `journal`
 - `workspace`
 
-### `@ronde/fs` and `@ronde/mem`
+### `@ronde/fs`
 
-Backend packages may offer convenience constructors, but they do not own
-managed product policy.
+The fs runtime package may offer convenience constructors, but it does
+not own managed product policy.
 
 ### `@ronde/providers`
 
@@ -525,36 +506,6 @@ Generic backend policy lives here, not in `providers`.
 contracts.
 
 ## Small examples
-
-### Swap runtime backend, keep engine
-
-```ts
-const rt = createMemRuntime()
-
-await engine(backend, {
-  ...rt,
-  toolkit,
-  prompt: "do work",
-})
-```
-
-Valid because the engine only needs the pair.
-
-### Durable artifacts, ephemeral history
-
-```ts
-const journal = new MemoryJournal()
-const workspace = new FsWorkspace(journal.id, "./scratch")
-
-await engine(backend, {
-  journal,
-  workspace,
-  toolkit,
-  prompt: "go",
-})
-```
-
-Valid because tools care about workspace capability, not journal backend family.
 
 ### Official provider plus retry
 
@@ -612,7 +563,7 @@ If the question is "who owns what?":
 - `Toolkit`: tool surface and execution
 - `CompletionBackend`: model-call abstraction
 - `@ronde/engine`: raw turn loop
-- `@ronde/fs` / `@ronde/mem`: concrete runtime implementations
+- `@ronde/fs`: concrete durable runtime implementation
 - `@ronde/providers`: official built-in providers
 - `@ronde/backend`: generic backend policy
 - `@ronde/ai-sdk`: opt-in Vercel AI SDK adapter
