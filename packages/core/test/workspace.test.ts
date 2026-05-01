@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
-  DirectoryWorkspace,
   Workspace,
-  isDirectoryWorkspace,
   sanitizeFilename,
   type SpillOpts,
   type SpillResult,
@@ -17,19 +15,6 @@ describe("@ronde/core workspace contract", () => {
       uri: "memory://workspace/test",
       bytes: 5,
     })
-  })
-
-  it("exposes DirectoryWorkspace as a pathful capability, not the base contract", async () => {
-    const workspace = new TestDirectoryWorkspace()
-    const result = await workspace.spill("hello")
-
-    expect(workspace.dir).toBe("/tmp/ronde")
-    expect(result.uri).toBe("file:///tmp/ronde/spill.txt")
-  })
-
-  it("identifies directory-backed workspaces structurally via isDirectoryWorkspace", () => {
-    expect(isDirectoryWorkspace(new TestWorkspace())).toBe(false)
-    expect(isDirectoryWorkspace(new TestDirectoryWorkspace())).toBe(true)
   })
 })
 
@@ -58,19 +43,6 @@ class TestWorkspace extends Workspace {
   async spill(content: string, _opts?: SpillOpts): Promise<SpillResult> {
     return {
       uri: "memory://workspace/test",
-      bytes: utf8ByteLength(content),
-    }
-  }
-}
-
-class TestDirectoryWorkspace extends DirectoryWorkspace {
-  readonly id = "workspace-2"
-  readonly kind = "dir"
-  readonly dir = "/tmp/ronde"
-
-  async spill(content: string, _opts?: SpillOpts): Promise<SpillResult> {
-    return {
-      uri: "file:///tmp/ronde/spill.txt",
       bytes: utf8ByteLength(content),
     }
   }

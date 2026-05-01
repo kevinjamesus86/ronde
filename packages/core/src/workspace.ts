@@ -18,6 +18,11 @@ export interface SpillResult {
 /**
  * Base workspace abstraction. Portable tools should target this
  * interface and rely on `spill()` for artifact persistence.
+ *
+ * Locality (e.g. exposing a concrete fs `dir`) is an
+ * implementation-level capability. Tools that need it do a
+ * structural check at the call site rather than discriminating on
+ * the contract.
  */
 export abstract class Workspace {
   /** Stable unique ID shared with the paired journal when applicable. */
@@ -25,21 +30,6 @@ export abstract class Workspace {
   abstract readonly kind: string
   /** Persist content and return a URI. */
   abstract spill(content: string, opts?: SpillOpts): Promise<SpillResult>
-}
-
-/**
- * Workspace capability for backends that expose a concrete local
- * directory. Tools that need to splice the workspace's spill
- * landing site into a path jail check for this.
- */
-export abstract class DirectoryWorkspace extends Workspace {
-  abstract readonly dir: string
-}
-
-export function isDirectoryWorkspace(
-  workspace: Workspace,
-): workspace is DirectoryWorkspace {
-  return "dir" in workspace && typeof workspace.dir === "string"
 }
 
 /**

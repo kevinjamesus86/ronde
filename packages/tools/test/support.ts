@@ -2,9 +2,8 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import {
-  DirectoryWorkspace,
   sanitizeFilename,
-  type Workspace,
+  Workspace,
   type SpillOpts,
   type SpillResult,
 } from "@ronde/core/workspace"
@@ -49,7 +48,7 @@ export function useTmp(): TmpHandle {
   }
 }
 
-export class TestDirectoryWorkspace extends DirectoryWorkspace {
+export class TestDirectoryWorkspace extends Workspace {
   readonly kind = "test-dir" as const
   readonly spills = new Map<string, string>()
 

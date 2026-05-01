@@ -19,7 +19,7 @@ import { grepFiles } from "./grep-files.js"
 import { listDirectory } from "./list-directory.js"
 import { shell, type SandboxConfig } from "./shell.js"
 import type { Snapshot } from "./shell-snapshot.js"
-import type { DirectoryWorkspace } from "@ronde/core/workspace"
+import type { Workspace } from "@ronde/core/workspace"
 
 export type { SandboxConfig } from "./shell.js"
 export type { Snapshot, ShellKind } from "./shell-snapshot.js"
@@ -42,7 +42,7 @@ export interface CoreToolsOptions {
  * For finer control, compose the individual tool factories directly
  * with `merge()`.
  */
-export function coreTools(opts: CoreToolsOptions): Toolkit<DirectoryWorkspace> {
+export function coreTools(opts: CoreToolsOptions): Toolkit<Workspace> {
   if (opts.roots.length === 0) {
     throw new Error("coreTools requires at least one root.")
   }

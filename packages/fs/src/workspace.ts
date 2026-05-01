@@ -3,16 +3,16 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { genHex } from "@ronde/core/id"
 import {
-  DirectoryWorkspace,
   sanitizeFilename,
   type SpillOpts,
   type SpillResult,
+  Workspace,
 } from "@ronde/core/workspace"
 import { rebase } from "./internal.js"
 
 export const TOOL_RESULTS_DIR = "tool-results"
 
-export class FsWorkspace extends DirectoryWorkspace {
+export class FsWorkspace extends Workspace {
   readonly kind = "fs" as const
 
   // Native-private — unreachable via cast or reflection. Exposed

@@ -7,7 +7,7 @@ import { z } from "zod/v4"
 import { genHex } from "@ronde/core/id"
 import type { StatefulToolContext, ToolResult } from "@ronde/core/toolkit"
 import { ok, err } from "@ronde/core/result"
-import type { DirectoryWorkspace } from "@ronde/core/workspace"
+import type { Workspace } from "@ronde/core/workspace"
 import type { PathContext } from "./context.js"
 import type { ShellData } from "./types.js"
 import { fsTool } from "./fs-tool.js"
@@ -124,7 +124,7 @@ async function run(
   sandbox: boolean | SandboxConfig,
   snapshot: boolean | Snapshot,
   args: ShellArgs,
-  ctx: StatefulToolContext<ShellState, DirectoryWorkspace>,
+  ctx: StatefulToolContext<ShellState, Workspace>,
 ): Promise<ToolResult<ShellData>> {
   await ensureSnapshot(snapshot, ctx.state)
   const raw = await runProcess(pathCtx, sandbox, args, ctx)

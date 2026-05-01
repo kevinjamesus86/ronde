@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
 import path from "node:path"
-import { isDirectoryWorkspace } from "@ronde/core/workspace"
 import { createRuntime } from "../src/managed.js"
 import { useTmp, withEnv } from "./support.js"
 
@@ -18,12 +17,9 @@ describe("@ronde createRuntime", () => {
       const runtime = await createRuntime()
       expect(runtime.journal.id).toBe(runtime.workspace.id)
       expect(runtime.workspace.kind).toBe("fs")
-      expect(isDirectoryWorkspace(runtime.workspace)).toBe(true)
-      if (isDirectoryWorkspace(runtime.workspace)) {
-        expect(
-          runtime.workspace.dir.startsWith(path.join(root, "projects")),
-        ).toBe(true)
-      }
+      expect(
+        runtime.workspace.dir.startsWith(path.join(root, "projects")),
+      ).toBe(true)
     })
   })
 
@@ -37,10 +33,7 @@ describe("@ronde createRuntime", () => {
     })
 
     expect(runtime.workspace.kind).toBe("fs")
-    expect(isDirectoryWorkspace(runtime.workspace)).toBe(true)
-    if (isDirectoryWorkspace(runtime.workspace)) {
-      expect(runtime.workspace.dir).toContain(path.join("projects", "acme"))
-      expect(runtime.workspace.dir).toContain("named-run")
-    }
+    expect(runtime.workspace.dir).toContain(path.join("projects", "acme"))
+    expect(runtime.workspace.dir).toContain("named-run")
   })
 })
