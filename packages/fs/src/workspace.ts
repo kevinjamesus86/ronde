@@ -4,15 +4,13 @@ import { pathToFileURL } from "node:url"
 import { genHex } from "@ronde/core/id"
 import {
   DirectoryWorkspace,
-  type PathSpillResult,
   sanitizeFilename,
   type SpillOpts,
+  type SpillResult,
 } from "@ronde/core/workspace"
 import { rebase } from "./internal.js"
 
 export const TOOL_RESULTS_DIR = "tool-results"
-
-export interface FsSpillResult extends PathSpillResult {}
 
 export class FsWorkspace extends DirectoryWorkspace {
   readonly kind = "fs" as const
@@ -37,14 +35,13 @@ export class FsWorkspace extends DirectoryWorkspace {
     this.#dir = dir
   }
 
-  async spill(content: string, o: SpillOpts = {}): Promise<FsSpillResult> {
+  async spill(content: string, o: SpillOpts = {}): Promise<SpillResult> {
     const base = sanitizeFilename(o.name ?? "") || `spill-${genHex()}`
     const name = `${base}.txt`
     const full = path.join(this.dir, TOOL_RESULTS_DIR, name)
     await fs.mkdir(path.dirname(full), { recursive: true })
     await fs.writeFile(full, content, "utf-8")
     return {
-      path: full,
       uri: pathToFileURL(full).href,
       bytes: Buffer.byteLength(content, "utf-8"),
     }

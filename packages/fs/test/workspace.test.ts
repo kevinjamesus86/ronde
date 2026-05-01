@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { FsWorkspace } from "@ronde/fs"
 import { rebase } from "../src/internal.js"
 import { useTmp } from "./support.js"
@@ -15,8 +16,9 @@ describe("@ronde/fs workspace spill", () => {
 
     const result = await workspace.spill("hello", { name: "log" })
 
-    expect(result.path).toBe(path.join(dir, "tool-results", "log.txt"))
-    await expect(fs.readFile(result.path, "utf8")).resolves.toBe("hello")
+    const spillPath = fileURLToPath(result.uri)
+    expect(spillPath).toBe(path.join(dir, "tool-results", "log.txt"))
+    await expect(fs.readFile(spillPath, "utf8")).resolves.toBe("hello")
   })
 
   it("sanitizes provided spill names before writing files", async () => {
@@ -25,7 +27,7 @@ describe("@ronde/fs workspace spill", () => {
 
     const result = await workspace.spill("hello", { name: "../bad:name" })
 
-    expect(path.basename(result.path)).toBe(".._bad_name.txt")
+    expect(path.basename(fileURLToPath(result.uri))).toBe(".._bad_name.txt")
   })
 
   it("falls back to a generated spill name when none is provided", async () => {
@@ -34,17 +36,20 @@ describe("@ronde/fs workspace spill", () => {
 
     const result = await workspace.spill("hello")
 
-    expect(path.basename(result.path)).toMatch(/^spill-[0-9a-f]+\.txt$/)
+    expect(path.basename(fileURLToPath(result.uri))).toMatch(
+      /^spill-[0-9a-f]+\.txt$/,
+    )
   })
 
-  it("returns file:// URIs and absolute spill paths", async () => {
+  it("returns absolute file:// URIs", async () => {
     const dir = tmp.dir()
     const workspace = new FsWorkspace("rt-1", dir)
 
     const result = await workspace.spill("hello", { name: "log" })
 
-    expect(path.isAbsolute(result.path)).toBe(true)
-    expect(result.uri).toBe(`file://${result.path}`)
+    const spillPath = fileURLToPath(result.uri)
+    expect(path.isAbsolute(spillPath)).toBe(true)
+    expect(result.uri.startsWith("file://")).toBe(true)
   })
 
   it("reports byte counts from spill content", async () => {

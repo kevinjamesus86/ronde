@@ -5,8 +5,8 @@ import {
   DirectoryWorkspace,
   sanitizeFilename,
   type Workspace,
-  type PathSpillResult,
   type SpillOpts,
+  type SpillResult,
 } from "@ronde/core/workspace"
 import type { Toolkit, ToolResult } from "@ronde/core/toolkit"
 import type { ToolCall } from "@ronde/core/tool"
@@ -60,14 +60,13 @@ export class TestDirectoryWorkspace extends DirectoryWorkspace {
     super()
   }
 
-  async spill(content: string, opts: SpillOpts = {}): Promise<PathSpillResult> {
+  async spill(content: string, opts: SpillOpts = {}): Promise<SpillResult> {
     const base = sanitizeFilename(opts.name ?? "") || "spill"
     const full = path.join(this.dir, `${base}.txt`)
     fs.mkdirSync(path.dirname(full), { recursive: true })
     fs.writeFileSync(full, content, "utf8")
     this.spills.set(full, content)
     return {
-      path: full,
       uri: `file://${full}`,
       bytes: Buffer.byteLength(content, "utf8"),
     }

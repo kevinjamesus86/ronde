@@ -6,7 +6,6 @@ import {
   sanitizeFilename,
   type SpillOpts,
   type SpillResult,
-  type PathSpillResult,
 } from "@ronde/core/workspace"
 import { utf8ByteLength } from "@ronde/core/bytes"
 
@@ -25,7 +24,7 @@ describe("@ronde/core workspace contract", () => {
     const result = await workspace.spill("hello")
 
     expect(workspace.dir).toBe("/tmp/ronde")
-    expect(result.path).toBe("/tmp/ronde/spill.txt")
+    expect(result.uri).toBe("file:///tmp/ronde/spill.txt")
   })
 
   it("identifies directory-backed workspaces structurally via isDirectoryWorkspace", () => {
@@ -69,10 +68,9 @@ class TestDirectoryWorkspace extends DirectoryWorkspace {
   readonly kind = "dir"
   readonly dir = "/tmp/ronde"
 
-  async spill(content: string, _opts?: SpillOpts): Promise<PathSpillResult> {
+  async spill(content: string, _opts?: SpillOpts): Promise<SpillResult> {
     return {
       uri: "file:///tmp/ronde/spill.txt",
-      path: "/tmp/ronde/spill.txt",
       bytes: utf8ByteLength(content),
     }
   }

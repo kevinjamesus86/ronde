@@ -15,28 +15,24 @@ export interface SpillResult {
   bytes: number
 }
 
-/** Spill result for workspaces that persist content to a local path. */
-export interface PathSpillResult extends SpillResult {
-  path: string
-}
-
 /**
  * Base workspace abstraction. Portable tools should target this
  * interface and rely on `spill()` for artifact persistence.
  */
-export abstract class Workspace<R extends SpillResult = SpillResult> {
+export abstract class Workspace {
   /** Stable unique ID shared with the paired journal when applicable. */
   abstract readonly id: string
   abstract readonly kind: string
   /** Persist content and return a URI. */
-  abstract spill(content: string, opts?: SpillOpts): Promise<R>
+  abstract spill(content: string, opts?: SpillOpts): Promise<SpillResult>
 }
 
 /**
- * Workspace capability for backends that expose a concrete directory
- * and pathful spill results.
+ * Workspace capability for backends that expose a concrete local
+ * directory. Tools that need to splice the workspace's spill
+ * landing site into a path jail check for this.
  */
-export abstract class DirectoryWorkspace extends Workspace<PathSpillResult> {
+export abstract class DirectoryWorkspace extends Workspace {
   abstract readonly dir: string
 }
 
