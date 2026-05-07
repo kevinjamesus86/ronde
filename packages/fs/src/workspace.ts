@@ -35,15 +35,68 @@ export class FsWorkspace extends Workspace {
     this.#dir = dir
   }
 
-  async spill(content: string, o: SpillOpts = {}): Promise<SpillResult> {
+  async spill(
+    content: string | Uint8Array,
+    o: SpillOpts = {},
+  ): Promise<SpillResult> {
+    const isText = typeof content === "string"
     const base = sanitizeFilename(o.name ?? "") || `spill-${genHex()}`
-    const name = `${base}.txt`
+    const ext = extensionFor(o.mediaType, isText)
+    const name = `${base}${ext}`
     const full = path.join(this.dir, TOOL_RESULTS_DIR, name)
     await fs.mkdir(path.dirname(full), { recursive: true })
-    await fs.writeFile(full, content, "utf-8")
+    if (isText) {
+      await fs.writeFile(full, content, "utf-8")
+      return {
+        uri: pathToFileURL(full).href,
+        bytes: Buffer.byteLength(content, "utf-8"),
+      }
+    }
+    await fs.writeFile(full, content)
     return {
       uri: pathToFileURL(full).href,
-      bytes: Buffer.byteLength(content, "utf-8"),
+      bytes: content.byteLength,
     }
   }
+}
+
+/**
+ * Pick a file extension from a mediaType. Falls back to `.txt` for
+ * text content without a mediaType, `.bin` for binary content
+ * without one. Common types get readable extensions; everything
+ * else uses the subtype after `/`.
+ */
+function extensionFor(mediaType: string | undefined, isText: boolean): string {
+  if (!mediaType) {
+    return isText ? ".txt" : ".bin"
+  }
+  const known: Record<string, string> = {
+    "text/plain": ".txt",
+    "text/markdown": ".md",
+    "text/html": ".html",
+    "application/json": ".json",
+    "application/pdf": ".pdf",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "audio/wav": ".wav",
+    "audio/mpeg": ".mp3",
+    "audio/ogg": ".ogg",
+    "video/mp4": ".mp4",
+  }
+  if (known[mediaType]) {
+    return known[mediaType]
+  }
+  const slash = mediaType.indexOf("/")
+  if (slash > 0 && slash < mediaType.length - 1) {
+    const sub = mediaType
+      .slice(slash + 1)
+      .split(";")[0]!
+      .trim()
+    if (/^[a-z0-9.-]+$/i.test(sub)) {
+      return `.${sub}`
+    }
+  }
+  return isText ? ".txt" : ".bin"
 }

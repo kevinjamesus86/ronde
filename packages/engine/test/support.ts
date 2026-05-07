@@ -290,14 +290,16 @@ export class TestJournal extends Journal {
 export class TestWorkspace extends Workspace {
   readonly id = "workspace-1"
   readonly kind = "test"
-  readonly spills: { content: string; opts: SpillOpts }[] = []
+  readonly spills: { content: string | Uint8Array; opts: SpillOpts }[] = []
 
-  async spill(content: string, opts: SpillOpts = {}): Promise<SpillResult> {
+  async spill(
+    content: string | Uint8Array,
+    opts: SpillOpts = {},
+  ): Promise<SpillResult> {
     this.spills.push({ content, opts })
-    return {
-      uri: `memory://spill/${this.spills.length}`,
-      bytes: utf8ByteLength(content),
-    }
+    const bytes =
+      typeof content === "string" ? utf8ByteLength(content) : content.byteLength
+    return { uri: `memory://spill/${this.spills.length}`, bytes }
   }
 }
 

@@ -63,6 +63,59 @@ describe("@ronde/fs workspace spill", () => {
   })
 })
 
+describe("@ronde/fs workspace binary spill", () => {
+  it("writes Uint8Array content as raw bytes with a mediaType-derived extension", async () => {
+    const dir = tmp.dir()
+    const workspace = new FsWorkspace("rt-1", dir)
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+
+    const result = await workspace.spill(png, {
+      name: "screenshot",
+      mediaType: "image/png",
+    })
+
+    const spillPath = fileURLToPath(result.uri)
+    expect(spillPath).toBe(path.join(dir, "tool-results", "screenshot.png"))
+    expect(result.bytes).toBe(4)
+    const onDisk = await fs.readFile(spillPath)
+    expect(onDisk.equals(Buffer.from(png))).toBe(true)
+  })
+
+  it("falls back to .bin for binary content without a mediaType", async () => {
+    const dir = tmp.dir()
+    const workspace = new FsWorkspace("rt-1", dir)
+    const bytes = new Uint8Array([1, 2, 3])
+
+    const result = await workspace.spill(bytes, { name: "raw" })
+
+    expect(path.basename(fileURLToPath(result.uri))).toBe("raw.bin")
+  })
+
+  it("derives extensions from mediaType subtypes when not in the known list", async () => {
+    const dir = tmp.dir()
+    const workspace = new FsWorkspace("rt-1", dir)
+
+    const result = await workspace.spill(new Uint8Array([0]), {
+      name: "data",
+      mediaType: "application/x-custom",
+    })
+
+    expect(path.basename(fileURLToPath(result.uri))).toBe("data.x-custom")
+  })
+
+  it("threads mediaType through for text spills (text/markdown → .md)", async () => {
+    const dir = tmp.dir()
+    const workspace = new FsWorkspace("rt-1", dir)
+
+    const result = await workspace.spill("# title", {
+      name: "doc",
+      mediaType: "text/markdown",
+    })
+
+    expect(path.basename(fileURLToPath(result.uri))).toBe("doc.md")
+  })
+})
+
 describe("@ronde/fs workspace capability boundary", () => {
   it("repoints through the internal rebase capability", () => {
     const dir = tmp.dir()

@@ -59,16 +59,24 @@ export class TestDirectoryWorkspace extends Workspace {
     super()
   }
 
-  async spill(content: string, opts: SpillOpts = {}): Promise<SpillResult> {
+  async spill(
+    content: string | Uint8Array,
+    opts: SpillOpts = {},
+  ): Promise<SpillResult> {
     const base = sanitizeFilename(opts.name ?? "") || "spill"
     const full = path.join(this.dir, `${base}.txt`)
     fs.mkdirSync(path.dirname(full), { recursive: true })
-    fs.writeFileSync(full, content, "utf8")
-    this.spills.set(full, content)
-    return {
-      uri: `file://${full}`,
-      bytes: Buffer.byteLength(content, "utf8"),
+    if (typeof content === "string") {
+      fs.writeFileSync(full, content, "utf8")
+      this.spills.set(full, content)
+      return {
+        uri: `file://${full}`,
+        bytes: Buffer.byteLength(content, "utf8"),
+      }
     }
+    fs.writeFileSync(full, content)
+    this.spills.set(full, "")
+    return { uri: `file://${full}`, bytes: content.byteLength }
   }
 }
 

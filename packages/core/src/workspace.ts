@@ -7,6 +7,12 @@
 export interface SpillOpts {
   /** Filename stem or resource label. Default: `"spill"`. */
   name?: string
+  /**
+   * Optional MIME type. Drives file-extension selection in fs-backed
+   * implementations and rides through to consumers via the resulting
+   * resource block when spill substitution kicks in.
+   */
+  mediaType?: string
 }
 
 export interface SpillResult {
@@ -23,13 +29,21 @@ export interface SpillResult {
  * implementation-level capability. Tools that need it do a
  * structural check at the call site rather than discriminating on
  * the contract.
+ *
+ * `content` accepts either UTF-8 text (`string`) or raw bytes
+ * (`Uint8Array`). Implementations encode appropriately —
+ * fs-backed implementations write text as UTF-8 and bytes as-is;
+ * extension is chosen from `opts.mediaType` when present.
  */
 export abstract class Workspace {
   /** Stable unique ID shared with the paired journal when applicable. */
   abstract readonly id: string
   abstract readonly kind: string
   /** Persist content and return a URI. */
-  abstract spill(content: string, opts?: SpillOpts): Promise<SpillResult>
+  abstract spill(
+    content: string | Uint8Array,
+    opts?: SpillOpts,
+  ): Promise<SpillResult>
 }
 
 /**
