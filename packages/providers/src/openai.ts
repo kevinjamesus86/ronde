@@ -140,6 +140,10 @@ function serializePart(
       return {
         type: "function_call_output",
         call_id: part.toolCallId,
+        // OpenAI Responses API function_call_output is text-only; binary
+        // and ref blocks render as compact descriptors via blocksToText.
+        // The model can still reason about artifacts via the URI and
+        // mediaType labels embedded in those descriptors.
         output: blocksToText(part.content),
       }
   }

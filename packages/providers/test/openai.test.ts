@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { text } from "@ronde/core/block"
+import { image, ref, text } from "@ronde/core/block"
 import {
   CompletionErrorKind,
   Effort,
@@ -126,6 +126,36 @@ describe("@ronde/providers openai backend", () => {
         output: "done",
       },
     ])
+  })
+
+  it("flattens multimodal tool-result blocks into the text-only output field", () => {
+    const items = serializeMessages([
+      assistantMessage([
+        toolCallPart({
+          toolCallId: "call-1",
+          name: "screenshot",
+          arguments: {},
+        }),
+      ]),
+      toolResultMessage("call-1", true, [
+        text("Captured."),
+        image("aGVsbG8=", "image/png"),
+        ref("file:///workspace/log.txt", {
+          mediaType: "text/plain",
+          bytes: 50_000,
+          summary: "tail",
+        }),
+      ]),
+    ])
+
+    const fco = items.find((i) => i.type === "function_call_output")
+    expect(fco).toBeDefined()
+    expect(fco!.call_id).toBe("call-1")
+    const output = fco!.output as string
+    expect(output).toContain("Captured.")
+    expect(output).toContain("[image/png image/png]")
+    expect(output).toContain("file:///workspace/log.txt")
+    expect(output).toContain("(tail)")
   })
 
   it("serializes tool schemas and strict flags", async () => {
