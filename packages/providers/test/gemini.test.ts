@@ -118,6 +118,31 @@ describe("@ronde/providers gemini backend", () => {
     ])
   })
 
+  it("routes multimodal user ContentPart blocks into Gemini Parts", () => {
+    const out = serializeMessages([
+      userMessage([
+        text("Inspect this:"),
+        image("aGVsbG8=", "image/png"),
+        image(new URL("gs://bucket/asset.png"), "image/png"),
+        ref("file:///workspace/notes.md", { mediaType: "text/markdown" }),
+      ]),
+    ])
+
+    const userMsg = out.find((m) => m.role === "user")
+    expect(userMsg).toBeDefined()
+    expect(userMsg!.parts).toEqual([
+      { text: "Inspect this:" },
+      { inlineData: { mimeType: "image/png", data: "aGVsbG8=" } },
+      { fileData: { mimeType: "image/png", fileUri: "gs://bucket/asset.png" } },
+      {
+        fileData: {
+          mimeType: "text/markdown",
+          fileUri: "file:///workspace/notes.md",
+        },
+      },
+    ])
+  })
+
   it("flattens multimodal tool-result blocks into the response.content field", () => {
     const out = serializeMessages([
       assistantMessage([

@@ -22,12 +22,12 @@ import {
   type ToolSchema,
 } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
-import { type Block, BlockKind } from "@ronde/core/block"
+import { type Block, BlockKind, image, text } from "@ronde/core/block"
 import {
+  contentPart,
   MessageType,
   Role,
   assistantMessage,
-  textPart,
   thinkingPart,
   toolCallPart,
   type Message,
@@ -203,16 +203,27 @@ function parseContentBlocks(
   responseId?: string,
 ): Message[] {
   const parts: MessagePart[] = []
+  // Coalesce contiguous user-visible content (text/image/document) into
+  // a single ContentPart so blocks ride together, mirroring how the
+  // model emitted them. Tool-use and thinking emit their own parts.
+  let pendingBlocks: Block[] = []
+  const flushContent = () => {
+    if (pendingBlocks.length > 0) {
+      parts.push(contentPart(Role.Assistant, pendingBlocks))
+      pendingBlocks = []
+    }
+  }
 
   for (const block of blocks) {
     if (block.type === "text") {
       const tb = block as TextBlock
       if (tb.text?.trim()) {
-        parts.push(textPart(Role.Assistant, tb.text))
+        pendingBlocks.push(text(tb.text))
       }
       continue
     }
     if (block.type === "thinking") {
+      flushContent()
       const tb = block as ThinkingBlock
       const content = tb.thinking || ""
       const meta = anthropicMeta(tb.signature || undefined)
@@ -223,6 +234,7 @@ function parseContentBlocks(
       continue
     }
     if (block.type === "tool_use") {
+      flushContent()
       const tb = block as ToolUseBlock
       if (tb.id && tb.name) {
         parts.push(
@@ -233,8 +245,33 @@ function parseContentBlocks(
           }),
         )
       }
+      continue
+    }
+    // Native multimodal response blocks — handled when Anthropic returns
+    // image or document content alongside text. Type names match the
+    // request-side mapping; route them back to ronde binary blocks.
+    const anyBlock = block as unknown as {
+      type: string
+      source?: {
+        type?: string
+        media_type?: string
+        data?: string
+        url?: string
+      }
+    }
+    if (anyBlock.type === "image" || anyBlock.type === "document") {
+      const src = anyBlock.source ?? {}
+      const mediaType =
+        src.media_type ??
+        (anyBlock.type === "image" ? "image/png" : "application/octet-stream")
+      if (src.type === "base64" && typeof src.data === "string") {
+        pendingBlocks.push(image(src.data, mediaType))
+      } else if (src.type === "url" && typeof src.url === "string") {
+        pendingBlocks.push(image(new URL(src.url), mediaType))
+      }
     }
   }
+  flushContent()
 
   if (parts.length === 0) {
     return []

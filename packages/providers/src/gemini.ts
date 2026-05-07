@@ -17,13 +17,19 @@ import {
   type ToolSchema,
 } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
-import { blocksToText } from "@ronde/core/block"
+import {
+  type Block,
+  BlockKind,
+  blocksToText,
+  image,
+  text,
+} from "@ronde/core/block"
 import { estimateTokens } from "@ronde/core/tokens"
 import {
+  contentPart,
   MessageType,
   Role,
   assistantMessage,
-  textPart,
   thinkingPart,
   toolCallPart,
   type Message,
@@ -82,13 +88,19 @@ function resolveToolName(
 function serializePart(
   part: NormalizedPart<GeminiMeta>,
   toolNamesById: Map<string, string>,
-): Record<string, unknown> | undefined {
+): Record<string, unknown> | Record<string, unknown>[] | undefined {
   switch (part.type) {
     case MessageType.Content: {
-      const text = blocksToText(part.content)
-      return part.meta
-        ? { text, thoughtSignature: part.meta.thoughtSignature }
-        : { text }
+      const parts = blocksToGeminiParts(part.content)
+      // Attach the part-level thoughtSignature to the first emitted Part
+      // — Gemini reads it as a per-Part annotation, not on the message.
+      if (part.meta && parts.length > 0) {
+        parts[0] = {
+          ...parts[0],
+          thoughtSignature: part.meta.thoughtSignature,
+        }
+      }
+      return parts
     }
     case MessageType.Think:
       if (part.meta) {
@@ -150,6 +162,51 @@ export function serializeMessages(messages: Message[]): Array<{
   )
 }
 
+/**
+ * Map a `Block[]` from a ContentPart into Gemini's per-Part vocabulary.
+ *
+ * - text   → `{ text }`
+ * - binary inline (base64 string) → `{ inlineData: { mimeType, data } }`
+ * - binary URL → `{ fileData: { mimeType, fileUri } }`
+ * - ref    → `{ fileData: { mimeType?, fileUri: uri } }`
+ */
+function blocksToGeminiParts(
+  blocks: readonly Block[],
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  for (const b of blocks) {
+    switch (b.kind) {
+      case BlockKind.Text:
+        out.push({ text: b.text })
+        break
+      case BlockKind.Binary:
+        if (b.data instanceof URL) {
+          out.push({
+            fileData: { mimeType: b.mediaType, fileUri: b.data.href },
+          })
+        } else {
+          out.push({
+            inlineData: { mimeType: b.mediaType, data: b.data },
+          })
+        }
+        break
+      case BlockKind.Ref:
+        out.push({
+          fileData: {
+            mimeType: b.mediaType ?? "application/octet-stream",
+            fileUri: b.uri,
+          },
+        })
+        break
+      default: {
+        const _: never = b
+        throw new Error(`unreachable: ${_}`)
+      }
+    }
+  }
+  return out
+}
+
 function sanitizeGeminiSchema(schema: unknown): unknown {
   if (Array.isArray(schema)) {
     return schema.map(sanitizeGeminiSchema)
@@ -201,6 +258,16 @@ function parseParts(
   const parts: MessagePart[] = []
   let toolCallIndex = 0
   let lastThoughtSignature: string | undefined
+  let pendingBlocks: Block[] = []
+  let pendingMeta: GeminiMeta | undefined
+
+  const flushContent = () => {
+    if (pendingBlocks.length > 0) {
+      parts.push(contentPart(Role.Assistant, pendingBlocks, pendingMeta))
+      pendingBlocks = []
+      pendingMeta = undefined
+    }
+  }
 
   for (const gp of geminiParts || []) {
     if (gp.thoughtSignature) {
@@ -208,6 +275,7 @@ function parseParts(
     }
 
     if (gp.functionCall?.name) {
+      flushContent()
       toolCallIndex += 1
       parts.push(
         toolCallPart({
@@ -224,20 +292,34 @@ function parseParts(
 
     if (gp.text?.trim()) {
       if (gp.thought === true) {
+        flushContent()
         const content = gp.text
         const meta = geminiMeta(gp.thoughtSignature || undefined)
         parts.push(thinkingPart(content, meta))
       } else {
-        parts.push(
-          textPart(
-            Role.Assistant,
-            gp.text,
-            lastThoughtSignature ? geminiMeta(lastThoughtSignature) : undefined,
-          ),
-        )
+        if (lastThoughtSignature && !pendingMeta) {
+          pendingMeta = geminiMeta(lastThoughtSignature)
+        }
+        pendingBlocks.push(text(gp.text))
       }
+      continue
+    }
+
+    if (gp.inlineData?.mimeType && typeof gp.inlineData.data === "string") {
+      pendingBlocks.push(image(gp.inlineData.data, gp.inlineData.mimeType))
+      continue
+    }
+    if (gp.fileData?.fileUri) {
+      pendingBlocks.push(
+        image(
+          new URL(gp.fileData.fileUri),
+          gp.fileData.mimeType ?? "application/octet-stream",
+        ),
+      )
+      continue
     }
   }
+  flushContent()
 
   if (parts.length === 0) {
     return []

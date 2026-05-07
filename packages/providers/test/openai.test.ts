@@ -128,6 +128,43 @@ describe("@ronde/providers openai backend", () => {
     ])
   })
 
+  it("routes multimodal user ContentPart blocks into OpenAI input content", () => {
+    const items = serializeMessages([
+      userMessage([
+        text("Look at this:"),
+        image("aGVsbG8=", "image/png"),
+        image(new URL("https://example.com/chart.png"), "image/png"),
+        image("aGVsbG8=", "application/pdf"),
+        ref("file:///workspace/log.txt", {
+          mediaType: "text/plain",
+          summary: "tail",
+        }),
+      ]),
+    ])
+
+    const userMsg = items.find((i) => i.role === "user")
+    expect(userMsg).toBeDefined()
+    expect(userMsg!.content).toEqual([
+      { type: "input_text", text: "Look at this:" },
+      {
+        type: "input_image",
+        image_url: "data:image/png;base64,aGVsbG8=",
+      },
+      {
+        type: "input_image",
+        image_url: "https://example.com/chart.png",
+      },
+      {
+        type: "input_file",
+        file_data: "data:application/pdf;base64,aGVsbG8=",
+      },
+      {
+        type: "input_text",
+        text: "[text/plain file:///workspace/log.txt (tail)]",
+      },
+    ])
+  })
+
   it("flattens multimodal tool-result blocks into the text-only output field", () => {
     const items = serializeMessages([
       assistantMessage([

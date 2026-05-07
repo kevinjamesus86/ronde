@@ -421,6 +421,67 @@ describe("@ronde/providers anthropic backend", () => {
     })
   })
 
+  it("converts native image and document response blocks back into binary blocks", async () => {
+    const backend = new AnthropicCompletionBackend({
+      nativeOpenAI: false,
+      apiKey: "secret",
+      baseURL: "https://api.anthropic.com",
+    })
+    ;(backend as any).client = {
+      messages: {
+        stream: vi.fn(() =>
+          fakeStream(async () => ({
+            id: "msg-1",
+            content: [
+              { type: "text", text: "Captured." },
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/png",
+                  data: "aGVsbG8=",
+                },
+              },
+              {
+                type: "document",
+                source: {
+                  type: "url",
+                  url: "https://example.com/report.pdf",
+                  media_type: "application/pdf",
+                },
+              },
+            ],
+            stop_reason: "end_turn",
+            usage: {
+              input_tokens: 1,
+              output_tokens: 1,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+          })),
+        ),
+      },
+    }
+
+    const result = await drain(backend.complete(baseRequest))
+
+    expect(result.messages[0].parts).toEqual([
+      {
+        type: MessageType.Content,
+        role: Role.Assistant,
+        content: [
+          { kind: "text", text: "Captured." },
+          { kind: "binary", data: "aGVsbG8=", mediaType: "image/png" },
+          {
+            kind: "binary",
+            data: new URL("https://example.com/report.pdf"),
+            mediaType: "application/pdf",
+          },
+        ],
+      },
+    ])
+  })
+
   it("maps anthropic stop reasons into ronde stop reasons", async () => {
     const backend = new AnthropicCompletionBackend({
       nativeOpenAI: false,

@@ -20,7 +20,7 @@ import {
   type ToolSchema,
 } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
-import { blocksToText } from "@ronde/core/block"
+import { type Block, BlockKind, blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -149,6 +149,70 @@ function serializePart(
   }
 }
 
+/**
+ * Map a `Block[]` from a user ContentPart into OpenAI's input content
+ * vocabulary.
+ *
+ * - text   → `{ type: "input_text", text }`
+ * - binary image/* (base64) → `{ type: "input_image", image_url: "data:...;base64,..." }`
+ * - binary image/* (URL) → `{ type: "input_image", image_url: url }`
+ * - binary application/pdf (base64) → `{ type: "input_file", file_data: "data:...;base64,..." }`
+ * - binary application/pdf (URL) → `{ type: "input_file", file_url: url }`
+ * - other binary / ref → `{ type: "input_text", text: "<descriptor>" }`
+ */
+function blocksToOpenAIInputContent(
+  blocks: readonly Block[],
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  for (const b of blocks) {
+    switch (b.kind) {
+      case BlockKind.Text:
+        out.push({ type: "input_text", text: b.text })
+        break
+      case BlockKind.Binary: {
+        const isUrl = b.data instanceof URL
+        if (b.mediaType.startsWith("image/")) {
+          out.push({
+            type: "input_image",
+            image_url: isUrl
+              ? (b.data as URL).href
+              : `data:${b.mediaType};base64,${b.data as string}`,
+          })
+        } else if (b.mediaType === "application/pdf") {
+          if (isUrl) {
+            out.push({ type: "input_file", file_url: (b.data as URL).href })
+          } else {
+            out.push({
+              type: "input_file",
+              file_data: `data:${b.mediaType};base64,${b.data as string}`,
+              ...(b.filename === undefined ? {} : { filename: b.filename }),
+            })
+          }
+        } else {
+          // Audio/video and other types: OpenAI's Responses API doesn't
+          // accept them in user messages today. Fall back to a descriptor.
+          const label = b.filename ?? b.mediaType
+          out.push({ type: "input_text", text: `[${b.mediaType} ${label}]` })
+        }
+        break
+      }
+      case BlockKind.Ref: {
+        const summary = b.summary ?? `${b.bytes ?? "?"} bytes`
+        out.push({
+          type: "input_text",
+          text: `[${b.mediaType ?? "ref"} ${b.uri} (${summary})]`,
+        })
+        break
+      }
+      default: {
+        const _: never = b
+        throw new Error(`unreachable: ${_}`)
+      }
+    }
+  }
+  return out
+}
+
 export function serializeMessages(
   messages: Message[],
   options: { replayReasoningItems?: boolean } = {},
@@ -157,19 +221,19 @@ export function serializeMessages(
   const normalized = canonicalize(messages, isOpenAIMeta)
   const items: Record<string, unknown>[] = []
 
-  // Adjacent non-assistant text parts coalesce into one role-tagged `message`
-  // item with multiple content entries — OpenAI's expected shape.
-  type TextBuffer = { role: "user" | "developer"; texts: string[] }
-  let pendingText: TextBuffer | undefined
+  // Adjacent non-assistant content parts coalesce into one role-tagged
+  // `message` item with multiple typed content entries — OpenAI's
+  // expected shape. Buffer holds the per-part typed items already
+  // routed via blocksToOpenAIInputContent so multimodal user input
+  // (input_text + input_image + input_file) lands intact.
+  type ContentBuffer = {
+    role: "user" | "developer"
+    items: Record<string, unknown>[]
+  }
+  let pendingText: ContentBuffer | undefined
   const flushText = () => {
-    if (pendingText && pendingText.texts.length > 0) {
-      items.push({
-        role: pendingText.role,
-        content: pendingText.texts.map((text) => ({
-          type: "input_text",
-          text,
-        })),
-      })
+    if (pendingText && pendingText.items.length > 0) {
+      items.push({ role: pendingText.role, content: pendingText.items })
     }
     pendingText = undefined
   }
@@ -199,12 +263,19 @@ export function serializeMessages(
           part.role === Role.System || part.role === Role.Developer
             ? "developer"
             : "user"
-        const text = blocksToText(part.content)
+        // developer messages don't accept multimodal — flatten via
+        // blocksToText. user messages get full per-block routing.
+        const next =
+          wireRole === "developer"
+            ? [{ type: "input_text", text: blocksToText(part.content) }]
+            : blocksToOpenAIInputContent(part.content)
         if (pendingText && pendingText.role === wireRole) {
-          pendingText.texts.push(text)
+          for (const item of next) {
+            pendingText.items.push(item)
+          }
         } else {
           flushText()
-          pendingText = { role: wireRole, texts: [text] }
+          pendingText = { role: wireRole, items: [...next] }
         }
         continue
       }
