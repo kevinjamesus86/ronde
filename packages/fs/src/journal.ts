@@ -306,31 +306,7 @@ function parseMetaRecord(line: string): FsJournalMetaRecord {
 }
 
 function parseJournalEvent(line: string): JournalEvent {
-  const event = JSON.parse(line) as JournalEvent
-  if (event.type === "message") {
-    normalizeLegacyMessageParts(event.message.parts)
-  }
-  return event
-}
-
-/**
- * Lift legacy `string` content on tool-result parts to `Block[]`.
- * In-place rewrite of parts read from pre-Block journals so the rest
- * of the framework only ever sees the new shape.
- */
-function normalizeLegacyMessageParts(parts: unknown[]): void {
-  for (const part of parts) {
-    if (
-      part !== null &&
-      typeof part === "object" &&
-      (part as { type?: unknown }).type === "tool_result"
-    ) {
-      const trp = part as { content: unknown }
-      if (typeof trp.content === "string") {
-        trp.content = [{ kind: "text", text: trp.content }]
-      }
-    }
-  }
+  return JSON.parse(line) as JournalEvent
 }
 
 function segmentFileName(generation: number): string {

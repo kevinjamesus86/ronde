@@ -16,8 +16,7 @@
  * Use `partRole(part)` to get a part's effective role.
  *
  * `ContentPart` and `ToolResultPart` carry `Block[]` — the universal
- * multimodal vocabulary defined in `block.ts`. Legacy journals with
- * stringified content are normalized at scan time.
+ * multimodal vocabulary defined in `block.ts`.
  */
 
 import { type Block, text } from "./block.js"
@@ -196,15 +195,8 @@ export function toolResultPart(opts: {
     type: MessageType.ToolResult,
     toolCallId: opts.toolCallId,
     ok: opts.ok,
-    content: normalizeToolResultContent(opts.content),
+    content:
+      typeof opts.content === "string" ? [text(opts.content)] : opts.content,
     ...(opts.meta === undefined ? {} : { meta: opts.meta }),
   }
-}
-
-/**
- * Lift legacy `string` tool-result content to `Block[]`. Used by
- * constructors and by journal scanners reading pre-Block journals.
- */
-export function normalizeToolResultContent(content: string | Block[]): Block[] {
-  return typeof content === "string" ? [text(content)] : content
 }
