@@ -41,7 +41,7 @@ import {
   type ToolSchema,
   type UsageStats,
 } from "@ronde/core/completion"
-import { blocksToText } from "@ronde/core/block"
+import { type Block, BlockKind, blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -78,6 +78,53 @@ type AiSdkAssistantPart = Extract<
 // -------------------------------------------------------
 // Request conversion: ronde → AI SDK
 // -------------------------------------------------------
+
+/**
+ * Map a `Block[]` to an AI SDK tool-result output. Pure-text content
+ * uses the cheap `{ type: "text" }` form; anything multimodal goes
+ * through the `{ type: "content", value: [...] }` envelope so file/url
+ * blocks ride alongside text.
+ */
+function blocksToToolResultOutput(
+  blocks: readonly Block[],
+): LanguageModelV3ToolResultPart["output"] {
+  const allText = blocks.every((b) => b.kind === BlockKind.Text)
+  if (allText) {
+    return { type: "text", value: blocksToText(blocks) }
+  }
+  const value: Array<
+    | { type: "text"; text: string }
+    | { type: "file-data"; data: string; mediaType: string; filename?: string }
+    | { type: "file-url"; url: string }
+  > = []
+  for (const b of blocks) {
+    switch (b.kind) {
+      case BlockKind.Text:
+        value.push({ type: "text", text: b.text })
+        break
+      case BlockKind.Binary:
+        if (b.data instanceof URL) {
+          value.push({ type: "file-url", url: b.data.href })
+        } else {
+          value.push({
+            type: "file-data",
+            data: b.data,
+            mediaType: b.mediaType,
+            ...(b.filename === undefined ? {} : { filename: b.filename }),
+          })
+        }
+        break
+      case BlockKind.Ref:
+        value.push({ type: "file-url", url: b.uri })
+        break
+      default: {
+        const _: never = b
+        throw new Error(`unreachable: ${_}`)
+      }
+    }
+  }
+  return { type: "content", value }
+}
 
 function convertMessages(messages: Message[]): AiSdkMessage[] {
   const out: AiSdkMessage[] = []
@@ -181,14 +228,13 @@ function convertMessages(messages: Message[]): AiSdkMessage[] {
       } else if (part.type === MessageType.ToolResult) {
         const slot = ensure("user")
         if (slot?.kind === "user") {
-          const text = blocksToText(part.content)
           slot.toolResults.push({
             type: "tool-result",
             toolCallId: part.toolCallId,
             toolName: toolNamesById.get(part.toolCallId) ?? part.toolCallId,
             output: part.ok
-              ? { type: "text", value: text }
-              : { type: "error-text", value: text },
+              ? blocksToToolResultOutput(part.content)
+              : { type: "error-text", value: blocksToText(part.content) },
           })
         }
       }

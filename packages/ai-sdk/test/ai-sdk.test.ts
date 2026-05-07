@@ -4,9 +4,13 @@ import {
   Role,
   StopReason,
   assistantMessage,
+  image,
+  ref,
+  text,
   textPart,
   thinkingPart,
   toolCallPart,
+  toolResultMessage,
   toolResultPart,
   userMessage,
 } from "@ronde/core"
@@ -275,6 +279,72 @@ describe("@ronde/ai-sdk request conversion", () => {
           toolCallId: "call_1",
           toolName: "search",
           output: { type: "text", value: "result text" },
+        },
+      ],
+    })
+  })
+
+  it("routes multimodal tool-result blocks through the AI SDK content envelope", async () => {
+    const calls: any[] = []
+    const backend = fromAiSdk(
+      mockAiSdkModel((options) => {
+        calls.push(options)
+        return {
+          content: [{ type: "text", text: "ok" }],
+          finishReason: { unified: "stop" },
+          usage: {
+            inputTokens: { total: 1 },
+            outputTokens: { total: 1 },
+          },
+          warnings: [],
+        }
+      }),
+    )
+
+    await drain(
+      backend.complete({
+        model: "x",
+        messages: [
+          assistantMessage([
+            toolCallPart({
+              toolCallId: "call_1",
+              name: "screenshot",
+              arguments: {},
+            }),
+          ]),
+          toolResultMessage("call_1", true, [
+            text("Captured."),
+            image("aGVsbG8=", "image/png"),
+            ref("file:///workspace/log.txt", {
+              mediaType: "text/plain",
+              bytes: 50_000,
+            }),
+          ]),
+        ],
+        tools: [],
+        maxOutput: 100,
+      }),
+    )
+
+    expect(calls[0]!.prompt).toContainEqual({
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "call_1",
+          toolName: "screenshot",
+          output: {
+            type: "content",
+            value: [
+              { type: "text", text: "Captured." },
+              {
+                type: "file-data",
+                data: "aGVsbG8=",
+                mediaType: "image/png",
+              },
+              { type: "file-url", url: "file:///workspace/log.txt" },
+            ],
+          },
         },
       ],
     })
