@@ -29,8 +29,16 @@ Run a single test file: `npx vitest run packages/engine/test/engine.test.ts`
   — package responsibilities, boundaries, and semantic ownership
 - [docs/core-concepts/architecture.md](./docs/core-concepts/architecture.md)
   — package layering, runtime flow, package map, and build/distribution structure
+- [docs/tool-authoring.md](./docs/tool-authoring.md)
+  — three tiers of tool authoring (text-only, multimodal, pre-spill)
+- [docs/patterns/sandbox-as-tool.md](./docs/patterns/sandbox-as-tool.md)
+  — wrapping a remote sandbox as a Toolkit returning multimodal Block[]
 
-Keep both documents accurate; they are the authoritative source for how the package layer fits together. Don't duplicate them here.
+Keep these documents accurate; they are the authoritative source for how the package layer fits together. Don't duplicate them here.
+
+### Content vocabulary
+
+Tool output and multimodal message content travel through the framework as `Block[]` — a three-variant discriminated union (`text` | `binary` | `ref`) defined in `@ronde/core/block`. ContentPart and ToolResultPart both carry `Block[]`. The engine's overflow protection runs as content-substitution: oversized blocks become `ref` blocks pointing at workspace artifacts. See `tool-authoring.md` for the call-site shape and `architecture.md` for the pipeline.
 
 ### Platform matrix
 

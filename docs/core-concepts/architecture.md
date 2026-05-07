@@ -174,14 +174,16 @@ journal durability. Role lives on the parts, not on the message, so a single
 ```text
 Message
   └── parts: MessagePart[]
-        ├── TextPart       — role: user | assistant | system | developer
+        ├── ContentPart    — role: user | assistant | system | developer
+        │                     content: Block[] (text/binary/ref)
         ├── ThinkingPart   — implicit: assistant
         ├── ToolCallPart   — implicit: assistant
         └── ToolResultPart — implicit: user
+                              content: Block[]
 ```
 
-Text is the only part where role is genuinely ambiguous (user prompts,
-assistant responses, system/developer instructions) and so carries it
+ContentPart is the only part where role is genuinely ambiguous (user
+prompts, assistant responses, system/developer instructions) and so carries it
 explicitly. Every other part type has one legal role by protocol, across
 every supported provider, and the shape encodes that directly. `partRole(part)`
 resolves the effective role for any part.
@@ -407,10 +409,10 @@ formatToolResult(toolkit, name, result, { workspace, toolUseId, maxInline })
     → formatter renders data → string | Block[]
     → normalize string to [text(s)]
     → fitBlocksToBudget — per block:
-        text   over budget → slice (head/tail/middle) + summary,
-                              then ref(uri, bytes, summary) sibling
+        text   over budget → slice (head/tail/middle), then a sibling
+                              ref(uri, { mediaType, bytes, summary })
         binary over budget → workspace.spill(bytes, { mediaType })
-                              → ref(uri, mediaType, bytes, filename?)
+                              → ref(uri, { mediaType, bytes, summary })
         ref               → pass through (already a handle)
 ```
 

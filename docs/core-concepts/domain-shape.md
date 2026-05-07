@@ -321,7 +321,7 @@ Owns artifact persistence:
 - `spill(content, opts?)` persists `string | Uint8Array` and returns
   `{ uri, bytes }`. `opts.mediaType` selects file extensions in
   fs-backed implementations and rides through into resulting `ref`
-  blocks during spill substitution.
+  blocks during content-substitution.
 - exposes backend-specific capabilities where needed (e.g. `dir` on
   fs-backed implementations — checked structurally at the call site)
 
@@ -342,7 +342,7 @@ The universal content vocabulary used by `ContentPart`,
 - `binary { kind: "binary", data: string | URL, mediaType, filename? }`
   — discriminated by `mediaType` (image/audio/file all collapse here)
 - `ref { kind: "ref", uri, mediaType?, bytes?, summary? }` — addressable
-  handle, used by spill substitution and for inputs that live elsewhere
+  handle, used by content-substitution and for inputs that live elsewhere
 
 Provider adapters route on `block.kind` and `mediaType`. Spill
 substitution (engine-side) replaces oversized blocks with `ref`
