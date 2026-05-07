@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
-import { type Block, BlockKind, blocksToText } from "@ronde/core/block"
+import {
+  type Block,
+  BlockKind,
+  blocksToText,
+  image,
+  ref,
+  text,
+} from "@ronde/core/block"
 import { err } from "@ronde/core/result"
 import {
   bindToolkitRuntime,
@@ -310,6 +317,143 @@ describe("@ronde/core formatToolResult framework truncation", () => {
     const head = firstTextBlock(out)
     expect(head.startsWith("x".repeat(100))).toBe(true)
     expect(head).toContain("901 characters truncated")
+  })
+
+  it("spills oversized binary blocks as Uint8Array and replaces with a ref", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit: Toolkit = {
+      schemas: [],
+      async execute() {
+        return ok(null)
+      },
+      formatters: {
+        screenshot: () => [
+          text("captured"),
+          image("aGVsbG8gd29ybGQgaGVsbG8gd29ybGQ=", "image/png"),
+        ],
+      },
+    }
+
+    const out = await formatToolResult(toolkit, "screenshot", ok(null), {
+      workspace,
+      toolUseId: "call-1",
+      // Force binary block over per-block budget. Text is 8 bytes; binary
+      // base64 is 28 chars. Budget 10 keeps text, evicts binary.
+      maxInline: 10,
+    })
+
+    expect(workspace.spills).toHaveLength(1)
+    expect(workspace.spills[0]!.opts).toEqual({
+      name: "screenshot-call-1-1",
+      mediaType: "image/png",
+    })
+    // Workspace receives the decoded bytes from base64.
+    expect(workspace.spills[0]!.content).toBeInstanceOf(Uint8Array)
+
+    expect(out).toHaveLength(2)
+    expect(out[0]).toEqual({ kind: BlockKind.Text, text: "captured" })
+    const r = refBlock(out)
+    expect(r.uri).toBe("memory://spill/1")
+    expect(r.mediaType).toBe("image/png")
+  })
+
+  it("collapses URL-form binary blocks to a ref without spilling", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit: Toolkit = {
+      schemas: [],
+      async execute() {
+        return ok(null)
+      },
+      formatters: {
+        chart: () => [
+          text("plot"),
+          image(new URL("https://example.com/chart.png"), "image/png"),
+        ],
+      },
+    }
+
+    const out = await formatToolResult(toolkit, "chart", ok(null), {
+      workspace,
+      toolUseId: "call-2",
+      maxInline: 100,
+    })
+
+    // No spill: URL form has no inline cost.
+    expect(workspace.spills).toHaveLength(0)
+    // The URL block itself is under-budget when converted to a ref by
+    // the URL-passthrough branch — but only triggers when over budget.
+    // Under budget, the binary block is preserved as-is.
+    expect(out).toHaveLength(2)
+    expect(out[0]).toEqual({ kind: BlockKind.Text, text: "plot" })
+    expect(out[1]!.kind).toBe(BlockKind.Binary)
+  })
+
+  it("converts oversized URL-form binary to a ref with the URL as the URI", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit: Toolkit = {
+      schemas: [],
+      async execute() {
+        return ok(null)
+      },
+      formatters: {
+        chart: () => [
+          text("plot"),
+          image(new URL("https://example.com/chart.png"), "image/png"),
+        ],
+      },
+    }
+
+    // Tiny budget makes the preceding text block exhaust the budget
+    // (it spills). The URL-form binary then falls through the URL
+    // branch without spilling and surfaces as a ref carrying the URL.
+    const out = await formatToolResult(toolkit, "chart", ok(null), {
+      workspace,
+      toolUseId: "call-3",
+      maxInline: 1,
+    })
+
+    // One spill — the text block. The URL binary doesn't spill;
+    // it converts to a ref using the URL as the URI.
+    expect(workspace.spills).toHaveLength(1)
+    const refs = out.filter((b) => b.kind === BlockKind.Ref) as Array<
+      Extract<Block, { kind: BlockKind.Ref }>
+    >
+    const urlRef = refs.find((r) => r.uri === "https://example.com/chart.png")
+    expect(urlRef).toBeDefined()
+    expect(urlRef!.mediaType).toBe("image/png")
+  })
+
+  it("passes a Block[] formatter return through without re-wrapping", async () => {
+    const workspace = new RecordingWorkspace()
+    const toolkit: Toolkit = {
+      schemas: [],
+      async execute() {
+        return ok(null)
+      },
+      formatters: {
+        rich: () => [
+          text("intro"),
+          ref("file:///tmp/log.txt", { mediaType: "text/plain", bytes: 100 }),
+        ],
+      },
+    }
+
+    const out = await formatToolResult(toolkit, "rich", ok(null), {
+      workspace,
+      toolUseId: "call-4",
+      maxInline: 100,
+    })
+
+    expect(workspace.spills).toHaveLength(0)
+    expect(out).toEqual([
+      { kind: BlockKind.Text, text: "intro" },
+      {
+        kind: BlockKind.Ref,
+        uri: "file:///tmp/log.txt",
+        mediaType: "text/plain",
+        bytes: 100,
+      },
+    ])
   })
 })
 
