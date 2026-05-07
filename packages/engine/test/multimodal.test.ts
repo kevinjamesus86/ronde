@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
-import { type Block, BlockKind, image, ref, text } from "@ronde/core/block"
-import { JournalEvent } from "@ronde/core/journal"
-import {
-  MessageType,
-  Role,
-  type Message,
-  type ToolResultPart,
-} from "@ronde/core/message"
+import { BlockKind, image, text } from "@ronde/core/block"
+import type { JournalEvent } from "@ronde/core/journal"
+import { MessageType, type ToolResultPart } from "@ronde/core/message"
 import { ok } from "@ronde/core/result"
 import { tool } from "@ronde/core/toolkit"
 import {

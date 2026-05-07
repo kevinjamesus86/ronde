@@ -22,7 +22,7 @@ import {
   type ToolSchema,
 } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
-import { type Block, BlockKind, blocksToText } from "@ronde/core/block"
+import { type Block, BlockKind } from "@ronde/core/block"
 import {
   MessageType,
   Role,

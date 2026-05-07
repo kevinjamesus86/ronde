@@ -284,6 +284,52 @@ describe("@ronde/ai-sdk request conversion", () => {
     })
   })
 
+  it("routes multimodal user ContentPart blocks into AI SDK file parts", async () => {
+    const calls: any[] = []
+    const backend = fromAiSdk(
+      mockAiSdkModel((options) => {
+        calls.push(options)
+        return {
+          content: [{ type: "text", text: "ok" }],
+          finishReason: { unified: "stop" },
+          usage: {
+            inputTokens: { total: 1 },
+            outputTokens: { total: 1 },
+          },
+          warnings: [],
+        }
+      }),
+    )
+
+    await drain(
+      backend.complete({
+        model: "x",
+        messages: [
+          userMessage([
+            text("Look at this:"),
+            image("aGVsbG8=", "image/png"),
+            ref("file:///workspace/data.pdf", {
+              mediaType: "application/pdf",
+            }),
+          ]),
+        ],
+        tools: [],
+        maxOutput: 100,
+      }),
+    )
+
+    const userMsg = calls[0]!.prompt.find((m: any) => m.role === "user")
+    expect(userMsg.content).toEqual([
+      { type: "text", text: "Look at this:" },
+      { type: "file", data: "aGVsbG8=", mediaType: "image/png" },
+      {
+        type: "file",
+        data: new URL("file:///workspace/data.pdf"),
+        mediaType: "application/pdf",
+      },
+    ])
+  })
+
   it("routes multimodal tool-result blocks through the AI SDK content envelope", async () => {
     const calls: any[] = []
     const backend = fromAiSdk(

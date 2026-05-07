@@ -126,6 +126,49 @@ function blocksToToolResultOutput(
   return { type: "content", value }
 }
 
+/**
+ * Map a `Block[]` from a ContentPart into AI SDK's user/assistant
+ * content vocabulary — `TextPart | FilePart`.
+ *
+ * - text   → { type: "text", text }
+ * - binary → { type: "file", mediaType, data, filename? }
+ * - ref    → { type: "file", mediaType?, data: new URL(uri) }
+ */
+function blocksToAiSdkContent(blocks: readonly Block[]): AiSdkUserPart[] {
+  const out: AiSdkUserPart[] = []
+  for (const b of blocks) {
+    switch (b.kind) {
+      case BlockKind.Text:
+        out.push({ type: "text", text: b.text })
+        break
+      case BlockKind.Binary: {
+        const part: Extract<AiSdkUserPart, { type: "file" }> = {
+          type: "file",
+          data: b.data,
+          mediaType: b.mediaType,
+        }
+        if (b.filename !== undefined) {
+          part.filename = b.filename
+        }
+        out.push(part)
+        break
+      }
+      case BlockKind.Ref:
+        out.push({
+          type: "file",
+          data: new URL(b.uri),
+          mediaType: b.mediaType ?? "application/octet-stream",
+        })
+        break
+      default: {
+        const _: never = b
+        throw new Error(`unreachable: ${_}`)
+      }
+    }
+  }
+  return out
+}
+
 function convertMessages(messages: Message[]): AiSdkMessage[] {
   const out: AiSdkMessage[] = []
   const toolNamesById = new Map<string, string>()
@@ -198,13 +241,19 @@ function convertMessages(messages: Message[]): AiSdkMessage[] {
       if (part.type === MessageType.Content) {
         const bucket = partRoleBucket(part.role)
         const slot = ensure(bucket)
-        const text = blocksToText(part.content)
         if (slot?.kind === "user") {
-          slot.texts.push({ type: "text", text })
+          for (const aiPart of blocksToAiSdkContent(part.content)) {
+            slot.texts.push(aiPart)
+          }
         } else if (slot?.kind === "assistant") {
-          slot.parts.push({ type: "text", text })
+          // blocksToAiSdkContent produces text/file parts — both are
+          // structurally assignable to AssistantPart's wider union.
+          for (const aiPart of blocksToAiSdkContent(part.content)) {
+            slot.parts.push(aiPart)
+          }
         } else if (slot?.kind === "system") {
-          slot.texts.push(text)
+          // System content is string-only; flatten.
+          slot.texts.push(blocksToText(part.content))
         }
       } else if (part.type === MessageType.Think) {
         if (!part.content.trim()) {

@@ -174,10 +174,9 @@ export async function formatToolResult(
   ctx?: FormatContext,
 ): Promise<Block[]> {
   const formatter = toolkit.formatters[toolName]
-  const rendered = formatter
+  const blocks = formatter
     ? renderWithFormatter(formatter, result)
-    : defaultFormatter(toolName, result)
-  const blocks = normalizeFormatted(rendered)
+    : [text(defaultFormatter(toolName, result))]
 
   if (!ctx) {
     return blocks
@@ -194,25 +193,21 @@ export async function formatToolResult(
   })
 }
 
-function normalizeFormatted(rendered: string | Block[]): Block[] {
-  return typeof rendered === "string" ? [text(rendered)] : rendered
-}
-
 function renderWithFormatter(
   formatter: ToolFormatterFn,
   result: ToolResult,
-): string | Block[] {
+): Block[] {
   if (result.ok) {
-    return formatter(result.data)
+    return toBlocks(formatter(result.data))
   }
   if (result.data === undefined) {
-    return result.error
+    return [text(result.error)]
   }
-  const formatted = formatter(result.data)
-  if (typeof formatted === "string") {
-    return `${result.error}\n${formatted}`
-  }
-  return [text(result.error), ...formatted]
+  return [text(result.error), ...toBlocks(formatter(result.data))]
+}
+
+function toBlocks(rendered: string | Block[]): Block[] {
+  return typeof rendered === "string" ? [text(rendered)] : rendered
 }
 
 interface FitOpts {
