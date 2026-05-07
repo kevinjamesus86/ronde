@@ -22,7 +22,7 @@ import {
   type ToolSchema,
 } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
-import { blocksToText } from "@ronde/core/block"
+import { type Block, BlockKind, blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -107,10 +107,76 @@ function serializePart(
       return {
         type: "tool_result",
         tool_use_id: part.toolCallId,
-        content: blocksToText(part.content),
+        content: blocksToAnthropicContent(part.content),
         is_error: !part.ok,
       }
   }
+}
+
+/**
+ * Map a `Block[]` to Anthropic's per-block tool_result content array.
+ *
+ * - text blocks → `{ type: "text", text }`
+ * - binary blocks with image/* → `{ type: "image", source: { ... } }`
+ * - binary blocks with application/pdf → `{ type: "document", source: { ... } }`
+ * - other binary (audio, video, unknown) → text block describing the artifact
+ *   (Anthropic doesn't accept those shapes in tool_result yet)
+ * - ref blocks → text block summarizing the URI + size
+ */
+function blocksToAnthropicContent(
+  blocks: readonly Block[],
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  for (const block of blocks) {
+    switch (block.kind) {
+      case BlockKind.Text:
+        out.push({ type: "text", text: block.text })
+        break
+      case BlockKind.Binary: {
+        const source =
+          block.data instanceof URL
+            ? { type: "url", url: block.data.href }
+            : { type: "base64", media_type: block.mediaType, data: block.data }
+        if (block.mediaType.startsWith("image/")) {
+          out.push({ type: "image", source })
+        } else if (block.mediaType === "application/pdf") {
+          out.push({
+            type: "document",
+            source: { ...source, media_type: "application/pdf" },
+          })
+        } else {
+          out.push({
+            type: "text",
+            text: anthropicArtifactDescriptor(block),
+          })
+        }
+        break
+      }
+      case BlockKind.Ref: {
+        out.push({ type: "text", text: anthropicRefDescriptor(block) })
+        break
+      }
+      default: {
+        const _: never = block
+        throw new Error(`unreachable: ${_}`)
+      }
+    }
+  }
+  return out
+}
+
+function anthropicArtifactDescriptor(
+  block: Extract<Block, { kind: BlockKind.Binary }>,
+): string {
+  const label = block.filename ?? block.mediaType
+  return `[${block.mediaType} ${label}]`
+}
+
+function anthropicRefDescriptor(
+  block: Extract<Block, { kind: BlockKind.Ref }>,
+): string {
+  const summary = block.summary ?? `${block.bytes ?? "?"} bytes`
+  return `[${block.mediaType ?? "ref"} ${block.uri} (${summary})]`
 }
 
 export function serializeMessages(

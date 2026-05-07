@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { text } from "@ronde/core/block"
+import { image, ref, text } from "@ronde/core/block"
 import {
   CompletionErrorKind,
   StopReason,
@@ -103,7 +103,7 @@ describe("@ronde/providers anthropic backend", () => {
           {
             type: "tool_result",
             tool_use_id: "call-1",
-            content: "done",
+            content: [{ type: "text", text: "done" }],
             is_error: false,
           },
         ],
@@ -178,18 +178,65 @@ describe("@ronde/providers anthropic backend", () => {
           {
             type: "tool_result",
             tool_use_id: "call-1",
-            content: "first",
+            content: [{ type: "text", text: "first" }],
             is_error: false,
           },
           {
             type: "tool_result",
             tool_use_id: "call-2",
-            content: "second",
+            content: [{ type: "text", text: "second" }],
             is_error: false,
           },
         ],
       },
     ])
+  })
+
+  it("routes multimodal tool-result blocks into Anthropic content shapes", () => {
+    const payload = serializeMessages([
+      assistantMessage([
+        toolCallPart({
+          toolCallId: "call-1",
+          name: "screenshot",
+          arguments: {},
+        }),
+      ]),
+      toolResultMessage("call-1", true, [
+        text("Captured."),
+        image("aGVsbG8=", "image/png"),
+        ref("file:///workspace/log.txt", {
+          mediaType: "text/plain",
+          bytes: 50_000,
+          summary: "tail",
+        }),
+      ]),
+    ])
+
+    expect(payload[1]).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: "call-1",
+          content: [
+            { type: "text", text: "Captured." },
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: "aGVsbG8=",
+              },
+            },
+            {
+              type: "text",
+              text: "[text/plain file:///workspace/log.txt (tail)]",
+            },
+          ],
+          is_error: false,
+        },
+      ],
+    })
   })
 
   it("serializes system prompts and tool schemas into anthropic request bodies", async () => {
