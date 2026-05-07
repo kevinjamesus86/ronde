@@ -113,6 +113,10 @@ function serializePart(
         ...(part.meta ? { thoughtSignature: part.meta.thoughtSignature } : {}),
       }
     case MessageType.ToolResult: {
+      // Gemini functionResponse.response carries structured JSON, not
+      // multimodal content. Block[] flattens via blocksToText with
+      // mediaType + URI descriptors so the model still sees what was
+      // produced even when the bytes themselves can't ride along.
       const text = blocksToText(part.content)
       return {
         functionResponse: {

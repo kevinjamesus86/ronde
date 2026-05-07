@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { text } from "@ronde/core/block"
+import { image, ref, text } from "@ronde/core/block"
 import {
   CompletionErrorKind,
   Effort,
@@ -116,6 +116,40 @@ describe("@ronde/providers gemini backend", () => {
         ],
       },
     ])
+  })
+
+  it("flattens multimodal tool-result blocks into the response.content field", () => {
+    const out = serializeMessages([
+      assistantMessage([
+        toolCallPart({
+          toolCallId: "call-1",
+          name: "screenshot",
+          arguments: {},
+        }),
+      ]),
+      toolResultMessage("call-1", true, [
+        text("Captured."),
+        image("aGVsbG8=", "image/png"),
+        ref("file:///workspace/log.txt", {
+          mediaType: "text/plain",
+          bytes: 50_000,
+          summary: "tail",
+        }),
+      ]),
+    ])
+
+    const userMessage = out.find((m) => m.role === "user")
+    expect(userMessage).toBeDefined()
+    const fr = userMessage!.parts[0]!.functionResponse as Record<
+      string,
+      unknown
+    >
+    expect(fr.id).toBe("call-1")
+    const content = (fr.response as { content: string }).content
+    expect(content).toContain("Captured.")
+    expect(content).toContain("image/png")
+    expect(content).toContain("file:///workspace/log.txt")
+    expect(content).toContain("(tail)")
   })
 
   it("serializes tools and response schemas into gemini request bodies", async () => {
