@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
+import { BlockKind } from "@ronde/core/block"
+import { ok } from "@ronde/core/result"
+import { formatToolResult } from "@ronde/core/toolkit"
 import { PathContext } from "../src/context.js"
 import { grepFiles } from "../src/grep-files.js"
 import type { GrepData } from "../src/types.js"
@@ -86,5 +89,43 @@ describe("@ronde/tools grep_files", () => {
     // No tool-level hint; framework appends its neutral hint when it cuts.
     expect(formatted).not.toContain("read_file")
     expect(formatted).not.toContain("Full list at")
+  })
+
+  it("framework spill-substitution wraps oversized grep output as [text, ref]", async () => {
+    const root = tmp.dir()
+    tmp.write(root, {
+      "haystack.txt": Array.from(
+        { length: 500 },
+        (_, i) => `match ${i + 1} ${"x".repeat(100)}`,
+      ).join("\n"),
+    })
+    const toolkit = grepFiles(new PathContext([root]))
+    const workspace = new TestDirectoryWorkspace("ws", tmp.dir())
+
+    const out = await formatToolResult(
+      toolkit,
+      "grep_files",
+      ok({
+        matches: Array.from({ length: 500 }, (_, i) => ({
+          file: "haystack.txt",
+          line: i + 1,
+          text: `match ${i + 1} ${"x".repeat(100)}`,
+        })),
+        fileCount: 1,
+        totalMatches: 500,
+      }),
+      { workspace, toolUseId: "call-1", maxInline: 200 },
+    )
+
+    expect(out.length).toBeGreaterThanOrEqual(1)
+    expect(out[0]!.kind).toBe(BlockKind.Text)
+    const r = out.find((b) => b.kind === BlockKind.Ref)
+    expect(r).toBeDefined()
+    expect(r!.kind).toBe(BlockKind.Ref)
+    if (r!.kind === BlockKind.Ref) {
+      expect(r!.uri.startsWith("file://")).toBe(true)
+      expect(r!.summary).toMatch(/^truncated to /)
+    }
+    expect(workspace.spills).toHaveLength(1)
   })
 })
