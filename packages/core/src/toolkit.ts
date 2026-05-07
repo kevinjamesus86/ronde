@@ -717,7 +717,7 @@ function createSingleToolRuntime(
     parameters: z.ZodType
     state?: StateConfig<any>
     execute: (args: any, ctx: any) => ToolExecuteReturn
-    format?: (data: unknown) => string
+    format?: (data: unknown) => string | Block[]
     truncate?: TruncateStrategy
     strict?: boolean
   },
