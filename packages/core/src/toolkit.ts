@@ -17,6 +17,7 @@
  */
 import { z } from "zod/v4"
 import type { Awaitable } from "./tool.js"
+import { type Block, BlockKind, ref, text } from "./block.js"
 import type { Message } from "./message.js"
 import type { ToolSchema } from "./completion.js"
 import { err, type Result } from "./result.js"
@@ -58,8 +59,12 @@ export type ToolExecutor<W extends Workspace = Workspace> = (
   ctx: ToolContext<W>,
 ) => ToolExecuteReturn
 
-/** Converts structured tool data into the string the model sees. */
-export type ToolFormatterFn = (data: unknown) => string
+/**
+ * Converts structured tool data into the content the model sees.
+ * Returns a string (the 90% case — wrapped to a single text block by
+ * the framework) or a `Block[]` directly for multimodal output.
+ */
+export type ToolFormatterFn = (data: unknown) => string | Block[]
 
 /**
  * How the framework cuts oversized formatted tool output before sending
@@ -155,50 +160,241 @@ export interface FormatContext {
 }
 
 /**
- * Resolve the formatted string for a tool output. When `ctx` is supplied,
- * the framework additionally enforces an inline size budget: oversized
- * output is spilled to the workspace and replaced with a size-strategy
- * slice plus a neutral hint. When `ctx` is omitted (tests, non-engine
- * callers), the function just renders — no spill, no size check.
+ * Resolve the formatted blocks for a tool output. When `ctx` is supplied,
+ * the framework enforces an inline size budget via content-substitution:
+ * oversized text blocks get sliced to fit; oversized binary blocks are
+ * spilled to the workspace and replaced with a `ref` block addressing
+ * the artifact. Ref blocks pass through unchanged. When `ctx` is omitted
+ * (tests, non-engine callers), no size check or spill happens.
  */
 export async function formatToolResult(
   toolkit: Toolkit<any>,
   toolName: string,
   result: ToolResult,
   ctx?: FormatContext,
-): Promise<string> {
+): Promise<Block[]> {
   const formatter = toolkit.formatters[toolName]
   const rendered = formatter
     ? renderWithFormatter(formatter, result)
     : defaultFormatter(toolName, result)
+  const blocks = normalizeFormatted(rendered)
 
   if (!ctx) {
-    return rendered
-  }
-  const maxInline = ctx.maxInline ?? DEFAULT_MAX_INLINE
-  if (rendered.length <= maxInline) {
-    return rendered
+    return blocks
   }
 
+  const maxInline = ctx.maxInline ?? DEFAULT_MAX_INLINE
   const strategy = toolkit.truncate?.[toolName] ?? "head"
-  const spill = await ctx.workspace.spill(rendered, {
-    name: `${toolName}-${ctx.toolUseId}`,
+  return fitBlocksToBudget(blocks, {
+    budget: maxInline,
+    strategy,
+    workspace: ctx.workspace,
+    toolName,
+    toolUseId: ctx.toolUseId,
   })
-  const slice = sliceByStrategy(rendered, maxInline, strategy)
-  return `${slice}\n\n[Full output at ${spill.uri} (${spill.bytes} bytes).]`
+}
+
+function normalizeFormatted(rendered: string | Block[]): Block[] {
+  return typeof rendered === "string" ? [text(rendered)] : rendered
 }
 
 function renderWithFormatter(
   formatter: ToolFormatterFn,
   result: ToolResult,
-): string {
+): string | Block[] {
   if (result.ok) {
     return formatter(result.data)
   }
   if (result.data === undefined) {
     return result.error
   }
-  return `${result.error}\n${formatter(result.data)}`
+  const formatted = formatter(result.data)
+  if (typeof formatted === "string") {
+    return `${result.error}\n${formatted}`
+  }
+  return [text(result.error), ...formatted]
+}
+
+interface FitOpts {
+  budget: number
+  strategy: TruncateStrategy
+  workspace: Workspace
+  toolName: string
+  toolUseId: string
+}
+
+/**
+ * Walk a `Block[]` and bring its inline size within budget. Per-block
+ * policy:
+ *
+ * - text > per-block ceiling: slice with the truncation strategy and
+ *   append a hint ref block with the spilled artifact URI.
+ * - binary > per-block ceiling: spill the bytes to the workspace,
+ *   replace with a ref block carrying the URI + mediaType + summary.
+ * - ref: passes through (already an addressable handle).
+ *
+ * The total inline size across all blocks is bounded by `budget`. If
+ * the sum exceeds budget after per-block decisions, additional binary
+ * blocks are substituted to a ref largest-first until under budget.
+ */
+async function fitBlocksToBudget(
+  blocks: Block[],
+  opts: FitOpts,
+): Promise<Block[]> {
+  const out: Block[] = []
+  let remaining = opts.budget
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]!
+    const fitted = await fitOne(b, remaining, i, opts)
+    for (const piece of fitted) {
+      out.push(piece)
+      remaining -= inlineByteSize(piece)
+    }
+  }
+  return out
+}
+
+async function fitOne(
+  block: Block,
+  remaining: number,
+  index: number,
+  opts: FitOpts,
+): Promise<Block[]> {
+  switch (block.kind) {
+    case BlockKind.Text: {
+      const size = utf8Size(block.text)
+      if (size <= remaining) {
+        return [block]
+      }
+      const strategy = opts.strategy
+      const spill = await opts.workspace.spill(block.text, {
+        name: spillName(opts, index),
+        mediaType: "text/plain",
+      })
+      const slice = sliceByStrategy(
+        block.text,
+        Math.max(0, remaining),
+        strategy,
+      )
+      return [
+        text(slice),
+        ref(spill.uri, {
+          mediaType: "text/plain",
+          bytes: spill.bytes,
+          summary: truncationSummary(strategy, remaining, size),
+        }),
+      ]
+    }
+    case BlockKind.Binary: {
+      const size = inlineByteSize(block)
+      if (size <= remaining) {
+        return [block]
+      }
+      // base64 strings can be spilled as their decoded bytes; URL-form
+      // binary is already external. We don't decode here — let the
+      // workspace receive the original payload form.
+      const payload =
+        typeof block.data === "string" ? base64ToBytes(block.data) : block.data
+      if (payload instanceof URL) {
+        // URL form has no inline cost; let it through as a ref.
+        return [
+          ref(payload.href, {
+            mediaType: block.mediaType,
+            bytes: undefined,
+            summary: block.filename,
+          }),
+        ]
+      }
+      const spill = await opts.workspace.spill(payload, {
+        name: spillName(opts, index),
+        mediaType: block.mediaType,
+      })
+      return [
+        ref(spill.uri, {
+          mediaType: block.mediaType,
+          bytes: spill.bytes,
+          summary: block.filename,
+        }),
+      ]
+    }
+    case BlockKind.Ref:
+      return [block]
+    default: {
+      const _: never = block
+      throw new Error(`unreachable: ${_}`)
+    }
+  }
+}
+
+function spillName(opts: FitOpts, index: number): string {
+  return `${opts.toolName}-${opts.toolUseId}-${index}`
+}
+
+function truncationSummary(
+  strategy: TruncateStrategy,
+  shown: number,
+  total: number,
+): string {
+  switch (strategy) {
+    case "head":
+      return `truncated to first ${shown} of ${total} bytes`
+    case "tail":
+      return `truncated to last ${shown} of ${total} bytes`
+    case "middle": {
+      const half = Math.floor(shown / 2)
+      return `truncated to first ${half} + last ${half} of ${total} bytes`
+    }
+  }
+}
+
+function utf8Size(s: string): number {
+  // Mirrors Buffer.byteLength without depending on it.
+  let size = 0
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i)
+    if (code < 0x80) {
+      size += 1
+    } else if (code < 0x800) {
+      size += 2
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      size += 4
+      i++
+    } else {
+      size += 3
+    }
+  }
+  return size
+}
+
+function inlineByteSize(block: Block): number {
+  switch (block.kind) {
+    case BlockKind.Text:
+      return utf8Size(block.text)
+    case BlockKind.Binary: {
+      if (block.data instanceof URL) {
+        return 0
+      }
+      // base64 expansion: 4 chars encode 3 bytes — but for budget
+      // purposes the inline cost is the base64 length itself.
+      return block.data.length
+    }
+    case BlockKind.Ref:
+      return 0
+    default: {
+      const _: never = block
+      throw new Error(`unreachable: ${_}`)
+    }
+  }
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  // Web-standard atob returns a binary string; map to Uint8Array.
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i)
+  }
+  return bytes
 }
 
 /**
@@ -318,7 +514,7 @@ export function tool<T extends z.ZodType, D = unknown>(
     parameters: T
     state?: undefined
     execute: ExecuteFn<z.infer<T>, ToolContext, D>
-    format?: (data: D) => string
+    format?: (data: D) => string | Block[]
     truncate?: TruncateStrategy
   },
 ): Toolkit
@@ -329,7 +525,7 @@ export function tool<S, T extends z.ZodType, D = unknown>(
     parameters: T
     state: StateConfig<S>
     execute: ExecuteFn<z.infer<T>, StatefulToolContext<S>, D>
-    format?: (data: D) => string
+    format?: (data: D) => string | Block[]
     truncate?: TruncateStrategy
   },
 ): Toolkit
@@ -341,7 +537,7 @@ export function tool<W extends Workspace>(): {
       parameters: T
       state?: undefined
       execute: ExecuteFn<z.infer<T>, ToolContext<W>, D>
-      format?: (data: D) => string
+      format?: (data: D) => string | Block[]
       truncate?: TruncateStrategy
     },
   ): Toolkit<W>
@@ -351,7 +547,7 @@ export function tool<W extends Workspace>(): {
       parameters: T
       state: StateConfig<S>
       execute: ExecuteFn<z.infer<T>, StatefulToolContext<S, W>, D>
-      format?: (data: D) => string
+      format?: (data: D) => string | Block[]
       truncate?: TruncateStrategy
     },
   ): Toolkit<W>

@@ -140,7 +140,7 @@ describe("@ronde/engine executeToolCalls", () => {
     const settledText = blocksToText(settled!.content)
     expect(settledText.startsWith("x".repeat(50))).toBe(true)
     expect(settledText).toContain("150 characters truncated")
-    expect(settledText).toContain("[Full output at memory://spill/1")
+    expect(settledText).toContain("memory://spill/1")
     expect(workspace.spills).toHaveLength(1)
   })
 

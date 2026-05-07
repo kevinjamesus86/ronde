@@ -112,12 +112,11 @@ export async function* executeToolCalls<W extends Workspace>(
     const tc = calls[i]!
     let content: Block[]
     try {
-      const formatted = await formatToolResult(toolkit, tc.name, result, {
+      content = await formatToolResult(toolkit, tc.name, result, {
         workspace,
         toolUseId: tc.toolCallId,
         maxInline,
       })
-      content = [text(formatted)]
     } catch (e) {
       // Formatter failure cannot orphan a tool pair — the model needs
       // a result for every tool_use.
