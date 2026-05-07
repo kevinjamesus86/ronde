@@ -81,8 +81,8 @@ function serializePart(
   toolNamesById: Map<string, string>,
 ): Record<string, unknown> | undefined {
   switch (part.type) {
-    case MessageType.Text:
-      return { type: "text", text: part.content }
+    case MessageType.Content:
+      return { type: "text", text: blocksToText(part.content) }
     case MessageType.Think:
       if (part.meta) {
         return {

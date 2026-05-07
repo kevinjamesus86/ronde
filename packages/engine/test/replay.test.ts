@@ -83,8 +83,8 @@ describe("@ronde/engine translateBufferedMessages", () => {
 
     expect(replay).toHaveLength(1)
     expect(replay[0]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
-      content: "[assistant text]\nvisible text",
+      type: MessageType.Content,
+      content: [{ kind: "text", text: "[assistant text]\nvisible text" }],
     })
   })
 
@@ -110,8 +110,13 @@ describe("@ronde/engine translateBufferedMessages", () => {
     ])
 
     expect(replay[0]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
-      content: '[assistant tool call] search\nid: call-1\nargs: {"q":"docs"}',
+      type: MessageType.Content,
+      content: [
+        {
+          kind: "text",
+          text: '[assistant tool call] search\nid: call-1\nargs: {"q":"docs"}',
+        },
+      ],
     })
   })
 
@@ -136,9 +141,13 @@ describe("@ronde/engine translateBufferedMessages", () => {
     ])
 
     expect(replay[1]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
-      content:
-        "[user tool result] search\nid: call-1\nstatus: failure\ncontent:\npermission denied",
+      type: MessageType.Content,
+      content: [
+        {
+          kind: "text",
+          text: "[user tool result] search\nid: call-1\nstatus: failure\ncontent:\npermission denied",
+        },
+      ],
     })
   })
 
@@ -162,13 +171,22 @@ describe("@ronde/engine translateBufferedMessages", () => {
 
     expect(replay).toHaveLength(2)
     expect(replay[0]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
-      content: '[assistant tool call] search\nid: call-1\nargs: {"q":"docs"}',
+      type: MessageType.Content,
+      content: [
+        {
+          kind: "text",
+          text: '[assistant tool call] search\nid: call-1\nargs: {"q":"docs"}',
+        },
+      ],
     })
     expect(replay[1]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
-      content:
-        "[user tool result] search\nid: call-1\nstatus: success\ncontent:\nfound it",
+      type: MessageType.Content,
+      content: [
+        {
+          kind: "text",
+          text: "[user tool result] search\nid: call-1\nstatus: success\ncontent:\nfound it",
+        },
+      ],
     })
   })
 })

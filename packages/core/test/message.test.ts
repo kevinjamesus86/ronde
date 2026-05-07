@@ -15,7 +15,13 @@ import {
 describe("@ronde/core message constructors", () => {
   it("builds a user message with one text part", () => {
     expect(userMessage("hello")).toEqual({
-      parts: [{ type: MessageType.Text, role: Role.User, content: "hello" }],
+      parts: [
+        {
+          type: MessageType.Content,
+          role: Role.User,
+          content: [text("hello")],
+        },
+      ],
     })
   })
 
@@ -63,9 +69,9 @@ describe("@ronde/core message constructors", () => {
 
   it("builds individual text, thinking, tool-call, and tool-result parts", () => {
     expect(textPart(Role.User, "hello", { source: "user" })).toEqual({
-      type: MessageType.Text,
+      type: MessageType.Content,
       role: Role.User,
-      content: "hello",
+      content: [text("hello")],
       meta: { source: "user" },
     })
     expect(thinkingPart("ponder", { hidden: true })).toEqual({
@@ -119,9 +125,9 @@ describe("@ronde/core canonical message shape", () => {
 
     expect(message.parts.map((part) => part.type)).toEqual([
       MessageType.Think,
-      MessageType.Text,
+      MessageType.Content,
       MessageType.ToolUse,
-      MessageType.Text,
+      MessageType.Content,
     ])
   })
 

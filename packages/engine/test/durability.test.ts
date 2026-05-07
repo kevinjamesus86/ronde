@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
+import { text } from "@ronde/core/block"
 import { StopReason, emptyUsage } from "@ronde/core/completion"
 import { MessageType, Role } from "@ronde/core/message"
 import { ok } from "@ronde/core/result"
@@ -86,9 +87,9 @@ describe("@ronde/engine durable event boundary", () => {
               parts: [
                 { type: MessageType.Think, content: "plan" },
                 {
-                  type: MessageType.Text,
+                  type: MessageType.Content,
                   role: Role.Assistant,
-                  content: "done",
+                  content: [text("done")],
                 },
               ],
             },
@@ -302,9 +303,9 @@ describe("@ronde/engine commit boundaries", () => {
               summary: {
                 parts: [
                   {
-                    type: MessageType.Text,
+                    type: MessageType.Content,
                     role: Role.User,
-                    content: "summary",
+                    content: [text("summary")],
                   },
                 ],
               },
@@ -366,9 +367,9 @@ describe("@ronde/engine commit boundaries", () => {
               summary: {
                 parts: [
                   {
-                    type: MessageType.Text,
+                    type: MessageType.Content,
                     role: Role.User,
-                    content: "summary",
+                    content: [text("summary")],
                   },
                 ],
               },

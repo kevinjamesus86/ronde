@@ -3,6 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod/v4"
 import { createFsRuntime } from "@ronde/fs"
+import { type Block, blocksToText } from "@ronde/core/block"
 import { CompletionError, CompletionErrorKind } from "@ronde/core/completion"
 import { ok } from "@ronde/core/result"
 import { tool } from "@ronde/core/toolkit"
@@ -27,9 +28,11 @@ function textHistory(
 ) {
   return messages
     .flatMap((message) => message.parts)
-    .filter((part) => part.type === "text")
+    .filter((part) => part.type === "content")
     .map((part) =>
-      "content" in part ? (part as { content: string }).content : "",
+      "content" in part
+        ? blocksToText((part as { content: Block[] }).content)
+        : "",
     )
 }
 

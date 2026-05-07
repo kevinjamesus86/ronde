@@ -83,14 +83,14 @@ function serializePart(
   options: { replayReasoningItems: boolean },
 ): Record<string, unknown> | undefined {
   switch (part.type) {
-    case MessageType.Text: {
+    case MessageType.Content: {
       // Only assistant text reaches here; non-assistant text is buffered
       // and coalesced into role-tagged `message` items by the caller.
       const item: Record<string, unknown> = {
         type: "message",
         role: "assistant",
         status: "completed",
-        content: [{ type: "output_text", text: part.content }],
+        content: [{ type: "output_text", text: blocksToText(part.content) }],
       }
       if (part.meta?.itemId) {
         item.id = part.meta.itemId
@@ -189,17 +189,18 @@ export function serializeMessages(
 
   for (const message of normalized) {
     for (const part of message.parts) {
-      if (part.type === MessageType.Text && part.role !== Role.Assistant) {
+      if (part.type === MessageType.Content && part.role !== Role.Assistant) {
         flushTools()
         const wireRole: "user" | "developer" =
           part.role === Role.System || part.role === Role.Developer
             ? "developer"
             : "user"
+        const text = blocksToText(part.content)
         if (pendingText && pendingText.role === wireRole) {
-          pendingText.texts.push(part.content)
+          pendingText.texts.push(text)
         } else {
           flushText()
-          pendingText = { role: wireRole, texts: [part.content] }
+          pendingText = { role: wireRole, texts: [text] }
         }
         continue
       }

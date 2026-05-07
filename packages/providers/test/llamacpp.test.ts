@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { text } from "@ronde/core/block"
 import { StopReason, type CompletionRequest } from "@ronde/core/completion"
 import {
   MessageType,
@@ -134,9 +135,9 @@ describe("@ronde/providers llamacpp backend", () => {
     expect(result.messages).toHaveLength(1)
     expect(result.messages[0].parts).toEqual([
       {
-        type: MessageType.Text,
+        type: MessageType.Content,
         role: Role.Assistant,
-        content: "hello",
+        content: [text("hello")],
         meta: { provider: "openai", itemId: "msg-1" },
       },
     ])

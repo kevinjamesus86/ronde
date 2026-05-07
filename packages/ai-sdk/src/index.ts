@@ -148,15 +148,16 @@ function convertMessages(messages: Message[]): AiSdkMessage[] {
 
   for (const msg of messages) {
     for (const part of msg.parts) {
-      if (part.type === MessageType.Text) {
+      if (part.type === MessageType.Content) {
         const bucket = partRoleBucket(part.role)
         const slot = ensure(bucket)
+        const text = blocksToText(part.content)
         if (slot?.kind === "user") {
-          slot.texts.push({ type: "text", text: part.content })
+          slot.texts.push({ type: "text", text })
         } else if (slot?.kind === "assistant") {
-          slot.parts.push({ type: "text", text: part.content })
+          slot.parts.push({ type: "text", text })
         } else if (slot?.kind === "system") {
-          slot.texts.push(part.content)
+          slot.texts.push(text)
         }
       } else if (part.type === MessageType.Think) {
         if (!part.content.trim()) {

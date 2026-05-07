@@ -5,7 +5,7 @@ import {
   emptyUsage,
   StopReason,
 } from "@ronde/core/completion"
-import { text } from "@ronde/core/block"
+import { blocksToText, text } from "@ronde/core/block"
 import { MessageType, partRole, Role, userMessage } from "@ronde/core/message"
 import { DefaultCompactionStrategy } from "../src/compaction.js"
 import { mockBackend, textResponse } from "./support.js"
@@ -27,9 +27,9 @@ describe("@ronde DefaultCompactionStrategy", () => {
     expect(request.system).toContain("continuation context")
     // No system-prompt-prepended user message — history flows through
     // directly. First message is the history's first message.
-    expect(request.messages[0]!.parts[0]!.type).toBe(MessageType.Text)
-    if (request.messages[0]!.parts[0]!.type === MessageType.Text) {
-      expect(request.messages[0]!.parts[0]!.content).toBe("prior")
+    expect(request.messages[0]!.parts[0]!.type).toBe(MessageType.Content)
+    if (request.messages[0]!.parts[0]!.type === MessageType.Content) {
+      expect(blocksToText(request.messages[0]!.parts[0]!.content)).toBe("prior")
     }
   })
 
@@ -50,9 +50,9 @@ describe("@ronde DefaultCompactionStrategy", () => {
         {
           parts: [
             {
-              type: MessageType.Text,
+              type: MessageType.Content,
               role: Role.Assistant,
-              content: "final reply",
+              content: [text("final reply")],
             },
           ],
         },
@@ -134,7 +134,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
     }
     expect(result.deferred).toHaveLength(2)
     expect(result.deferred[0]!.parts[0]!.type).toBe(MessageType.ToolUse)
-    expect(result.deferred[1]!.parts[0]!.type).toBe(MessageType.Text)
+    expect(result.deferred[1]!.parts[0]!.type).toBe(MessageType.Content)
   })
 
   it("returns not_compacted when the compacted response has no assistant text", async () => {
@@ -175,13 +175,12 @@ describe("@ronde DefaultCompactionStrategy", () => {
 
     expect(result.kind).toBe("compacted")
     if (result.kind === "compacted") {
-      expect(result.summary.parts[0]!.type).toBe(MessageType.Text)
-      if (result.summary.parts[0]!.type === MessageType.Text) {
+      expect(result.summary.parts[0]!.type).toBe(MessageType.Content)
+      if (result.summary.parts[0]!.type === MessageType.Content) {
         expect(result.summary.parts[0]!.role).toBe(Role.User)
-        expect(result.summary.parts[0]!.content).toContain(
-          "Continuation context",
-        )
-        expect(result.summary.parts[0]!.content).toContain("summary body")
+        const summaryText = blocksToText(result.summary.parts[0]!.content)
+        expect(summaryText).toContain("Continuation context")
+        expect(summaryText).toContain("summary body")
       }
     }
   })

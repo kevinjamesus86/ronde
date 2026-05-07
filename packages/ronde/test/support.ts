@@ -10,8 +10,10 @@ import {
   type ConfiguredBackend,
   type ResolvedBackendConfig,
 } from "@ronde/core/completion"
+import { blocksToText } from "@ronde/core/block"
 import {
   assistantMessage,
+  MessageType,
   partRole,
   Role,
   thinkingPart,
@@ -223,8 +225,11 @@ export function lastAssistantText(history: Message[]): string | undefined {
     const msg = history[i]!
     for (let j = msg.parts.length - 1; j >= 0; j--) {
       const part = msg.parts[j]!
-      if (part.type === "text" && partRole(part) === Role.Assistant) {
-        return part.content
+      if (
+        part.type === MessageType.Content &&
+        partRole(part) === Role.Assistant
+      ) {
+        return blocksToText(part.content)
       }
     }
   }

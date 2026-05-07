@@ -409,9 +409,9 @@ describe("@ronde/engine streaming completion", () => {
             parts: [
               { type: MessageType.Think, content: "plan-1plan-2" },
               {
-                type: MessageType.Text,
+                type: MessageType.Content,
                 role: Role.Assistant,
-                content: "hello world",
+                content: [text("hello world")],
               },
             ],
           },

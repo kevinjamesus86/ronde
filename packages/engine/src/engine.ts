@@ -782,12 +782,14 @@ async function* emitResponseProgress(
         step.reasoning.push(part.content)
         yield progressEvent("thinking", { turn, content: part.content })
       } else if (
-        part.type === MessageType.Text &&
-        part.role === Role.Assistant &&
-        part.content.trim()
+        part.type === MessageType.Content &&
+        part.role === Role.Assistant
       ) {
-        step.text = step.text ? step.text + part.content : part.content
-        yield progressEvent("text", { turn, content: part.content })
+        const txt = blocksToText(part.content)
+        if (txt.trim()) {
+          step.text = step.text ? step.text + txt : txt
+          yield progressEvent("text", { turn, content: txt })
+        }
       }
     }
   }

@@ -1,3 +1,4 @@
+import { blocksToText } from "@ronde/core/block"
 import {
   CompletionError,
   CompletionErrorKind,
@@ -121,11 +122,10 @@ export class DefaultCompactionStrategy implements CompactionStrategy {
       for (const message of compactResponse.messages) {
         for (const part of message.parts) {
           if (
-            part.type === MessageType.Text &&
-            part.role === Role.Assistant &&
-            part.content
+            part.type === MessageType.Content &&
+            part.role === Role.Assistant
           ) {
-            summary += part.content
+            summary += blocksToText(part.content)
           }
         }
       }

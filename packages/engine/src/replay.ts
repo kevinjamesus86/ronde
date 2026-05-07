@@ -59,8 +59,8 @@ export function translateBufferedMessages(messages: Message[]): Message[] {
       switch (part.type) {
         case MessageType.Think:
           break
-        case MessageType.Text: {
-          const content = part.content.trim()
+        case MessageType.Content: {
+          const content = blocksToText(part.content).trim()
           if (!content) {
             break
           }

@@ -11,6 +11,7 @@ import {
   type UsageStats,
 } from "@ronde/core/completion"
 import { type JournalEvent, Journal } from "@ronde/core/journal"
+import { text as textBlock } from "@ronde/core/block"
 import { err } from "@ronde/core/result"
 import {
   MessageType,
@@ -125,7 +126,11 @@ export function textResponse(
     messages: [
       {
         parts: [
-          { type: MessageType.Text, role: Role.Assistant, content: text },
+          {
+            type: MessageType.Content,
+            role: Role.Assistant,
+            content: [textBlock(text)],
+          },
         ],
       },
     ],
@@ -145,7 +150,11 @@ export function thinkingAndTextResponse(
       {
         parts: [
           { type: MessageType.Think, content: thinking },
-          { type: MessageType.Text, role: Role.Assistant, content: text },
+          {
+            type: MessageType.Content,
+            role: Role.Assistant,
+            content: [textBlock(text)],
+          },
         ],
       },
     ],
@@ -210,7 +219,11 @@ export function cutoffResponse(text: string): CompletionResponse {
     messages: [
       {
         parts: [
-          { type: MessageType.Text, role: Role.Assistant, content: text },
+          {
+            type: MessageType.Content,
+            role: Role.Assistant,
+            content: [textBlock(text)],
+          },
         ],
       },
     ],

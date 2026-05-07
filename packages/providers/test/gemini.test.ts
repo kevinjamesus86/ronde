@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { text } from "@ronde/core/block"
 import {
   CompletionErrorKind,
   Effort,
@@ -257,9 +258,9 @@ describe("@ronde/providers gemini backend", () => {
         meta: { provider: "gemini", thoughtSignature: "sig-1" },
       },
       {
-        type: MessageType.Text,
+        type: MessageType.Content,
         role: Role.Assistant,
-        content: "hello",
+        content: [text("hello")],
         meta: { provider: "gemini", thoughtSignature: "sig-1" },
       },
       {

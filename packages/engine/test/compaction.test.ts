@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
-import { text } from "@ronde/core/block"
+import { blocksToText, text } from "@ronde/core/block"
 import { StopReason, emptyUsage } from "@ronde/core/completion"
 import { MessageType, Role, userMessage } from "@ronde/core/message"
 import { ok } from "@ronde/core/result"
@@ -247,9 +247,14 @@ describe("@ronde/engine buffered-turn compaction", () => {
       expect.objectContaining({
         parts: [
           expect.objectContaining({
-            type: MessageType.Text,
+            type: MessageType.Content,
             role: Role.Assistant,
-            content: expect.stringContaining("[assistant tool call] echo"),
+            content: [
+              {
+                kind: "text",
+                text: expect.stringContaining("[assistant tool call] echo"),
+              },
+            ],
           }),
         ],
       }),
@@ -258,9 +263,14 @@ describe("@ronde/engine buffered-turn compaction", () => {
       expect.objectContaining({
         parts: [
           expect.objectContaining({
-            type: MessageType.Text,
+            type: MessageType.Content,
             role: Role.User,
-            content: expect.stringContaining("[user tool result] echo"),
+            content: [
+              {
+                kind: "text",
+                text: expect.stringContaining("[user tool result] echo"),
+              },
+            ],
           }),
         ],
       }),
@@ -297,7 +307,9 @@ describe("@ronde/engine buffered-turn compaction", () => {
     expect(messages[0]).toEqual(userMessage("summary"))
     const replayed = messages.slice(1)
     expect(
-      replayed.every((m) => m.parts.every((p) => p.type === MessageType.Text)),
+      replayed.every((m) =>
+        m.parts.every((p) => p.type === MessageType.Content),
+      ),
     ).toBe(true)
   })
 
@@ -387,8 +399,10 @@ describe("@ronde/engine buffered-turn compaction", () => {
       .slice(1)
       .flatMap((m) => m.parts)
       .flatMap((p) =>
-        p.type === MessageType.Text
-          ? [...p.content.matchAll(/id: (\S+)/g)].map((m) => m[1]!)
+        p.type === MessageType.Content
+          ? [...blocksToText(p.content).matchAll(/id: (\S+)/g)].map(
+              (m) => m[1]!,
+            )
           : [],
       )
     expect(translatedIds).toEqual(["t-huge", "t-huge"])
@@ -424,7 +438,7 @@ describe("@ronde/engine buffered-turn compaction", () => {
     const replayedParts = messages
       .slice(1)
       .flatMap((m) => m.parts.map((p) => p.type))
-    expect(replayedParts.every((t) => t === MessageType.Text)).toBe(true)
+    expect(replayedParts.every((t) => t === MessageType.Content)).toBe(true)
   })
 })
 
@@ -465,9 +479,9 @@ describe("@ronde/engine deferred replay", () => {
     const messages = backend.requests[1]?.messages ?? []
     expect(messages[0]).toEqual(userMessage("summary"))
     expect(messages[1]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
+      type: MessageType.Content,
       role: Role.User,
-      content: expect.stringContaining("older-thing"),
+      content: [{ kind: "text", text: expect.stringContaining("older-thing") }],
     })
   })
 
@@ -517,14 +531,24 @@ describe("@ronde/engine deferred replay", () => {
     const messages = backend.requests[1]?.messages ?? []
     expect(messages).toHaveLength(3)
     expect(messages[1]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
+      type: MessageType.Content,
       role: Role.Assistant,
-      content: expect.stringContaining("[assistant tool call] search"),
+      content: [
+        {
+          kind: "text",
+          text: expect.stringContaining("[assistant tool call] search"),
+        },
+      ],
     })
     expect(messages[2]?.parts[0]).toMatchObject({
-      type: MessageType.Text,
+      type: MessageType.Content,
       role: Role.User,
-      content: expect.stringContaining("[user tool result] search"),
+      content: [
+        {
+          kind: "text",
+          text: expect.stringContaining("[user tool result] search"),
+        },
+      ],
     })
   })
 
@@ -557,13 +581,25 @@ describe("@ronde/engine deferred replay", () => {
     const messages = backend.requests[1]?.messages ?? []
     expect(messages[0]).toEqual(userMessage("summary"))
     expect(messages[1]?.parts[0]).toMatchObject({
-      content: expect.stringContaining("deferred-text"),
+      content: [
+        { kind: "text", text: expect.stringContaining("deferred-text") },
+      ],
     })
     expect(messages[2]?.parts[0]).toMatchObject({
-      content: expect.stringContaining("[assistant tool call] echo"),
+      content: [
+        {
+          kind: "text",
+          text: expect.stringContaining("[assistant tool call] echo"),
+        },
+      ],
     })
     expect(messages[3]?.parts[0]).toMatchObject({
-      content: expect.stringContaining("[user tool result] echo"),
+      content: [
+        {
+          kind: "text",
+          text: expect.stringContaining("[user tool result] echo"),
+        },
+      ],
     })
   })
 
@@ -603,7 +639,9 @@ describe("@ronde/engine deferred replay", () => {
     const second = journal.active[1]
     if (second?.type === "message") {
       expect(second.message.parts[0]).toMatchObject({
-        content: expect.stringContaining("deferred-text"),
+        content: [
+          { kind: "text", text: expect.stringContaining("deferred-text") },
+        ],
       })
     }
   })

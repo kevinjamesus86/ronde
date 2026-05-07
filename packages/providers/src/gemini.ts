@@ -84,13 +84,12 @@ function serializePart(
   toolNamesById: Map<string, string>,
 ): Record<string, unknown> | undefined {
   switch (part.type) {
-    case MessageType.Text:
+    case MessageType.Content: {
+      const text = blocksToText(part.content)
       return part.meta
-        ? {
-            text: part.content,
-            thoughtSignature: part.meta.thoughtSignature,
-          }
-        : { text: part.content }
+        ? { text, thoughtSignature: part.meta.thoughtSignature }
+        : { text }
+    }
     case MessageType.Think:
       if (part.meta) {
         return {

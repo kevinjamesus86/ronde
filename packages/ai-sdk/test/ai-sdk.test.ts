@@ -403,7 +403,7 @@ describe("@ronde/ai-sdk response conversion", () => {
     expect(result.messages[0]!.parts.map((part) => part.type)).toEqual([
       MessageType.Think,
       MessageType.ToolUse,
-      MessageType.Text,
+      MessageType.Content,
     ])
   })
 
@@ -643,7 +643,7 @@ describe("@ronde/ai-sdk adapter", () => {
     expect(response.usage.outputTokens).toBe(3)
     expect(response.messages[0].parts.map((p: any) => p.type)).toEqual([
       MessageType.Think,
-      MessageType.Text,
+      MessageType.Content,
       MessageType.ToolUse,
     ])
   })

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { text } from "@ronde/core/block"
 import {
   CompletionErrorKind,
   Effort,
@@ -264,9 +265,9 @@ describe("@ronde/providers openai backend", () => {
         },
       },
       {
-        type: MessageType.Text,
+        type: MessageType.Content,
         role: Role.Assistant,
-        content: "hello",
+        content: [text("hello")],
         meta: {
           provider: "openai",
           itemId: "m1",

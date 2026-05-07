@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { z } from "zod/v4"
+import { blocksToText } from "@ronde/core/block"
 import {
   CompletionError,
   CompletionErrorKind,
@@ -494,8 +495,8 @@ describe("@ronde/engine abort and cutoff invariants", () => {
     expect(secondRequest).toBeDefined()
     const lastMessage = secondRequest!.messages.at(-1)
     const content = lastMessage?.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.content)
+      .filter((part) => part.type === "content")
+      .map((part) => blocksToText(part.content))
       .join("")
 
     expect(content?.toLowerCase()).toContain("cut off")

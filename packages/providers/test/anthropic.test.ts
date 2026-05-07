@@ -320,7 +320,11 @@ describe("@ronde/providers anthropic backend", () => {
         content: "think",
         meta: { provider: "anthropic", signature: "sig-1" },
       },
-      { type: MessageType.Text, role: Role.Assistant, content: "hello" },
+      {
+        type: MessageType.Content,
+        role: Role.Assistant,
+        content: [text("hello")],
+      },
       {
         type: MessageType.ToolUse,
         toolCallId: "call-1",

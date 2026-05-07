@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -31,9 +32,16 @@ function isOwnMeta(meta: unknown): meta is OwnMeta {
 }
 
 function textContent(part: NormalizedPart<OwnMeta>): string | undefined {
-  return "content" in part && typeof part.content === "string"
-    ? part.content
-    : undefined
+  if (!("content" in part)) {
+    return undefined
+  }
+  if (typeof part.content === "string") {
+    return part.content
+  }
+  if (Array.isArray(part.content)) {
+    return blocksToText(part.content)
+  }
+  return undefined
 }
 
 describe("@ronde/backend canonicalize", () => {
@@ -68,8 +76,8 @@ describe("@ronde/backend canonicalize", () => {
 
     expect(normalized[0].parts).toHaveLength(1)
     expect(normalized[0].parts[0]).toMatchObject({
-      type: MessageType.Text,
-      content: "public",
+      type: MessageType.Content,
+      content: [{ kind: "text", text: "public" }],
     })
     expect(normalized[0].parts[0]).not.toHaveProperty("meta")
   })
@@ -160,8 +168,8 @@ describe("@ronde/backend coalesceByRole", () => {
       ),
       (role) => role,
       (part) =>
-        part.type === MessageType.Text && part.role === Role.User
-          ? part.content
+        part.type === MessageType.Content && part.role === Role.User
+          ? blocksToText(part.content)
           : undefined,
     )
 
