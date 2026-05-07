@@ -1,3 +1,4 @@
+import { blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -86,7 +87,7 @@ export function translateBufferedMessages(messages: Message[]): Message[] {
               `${toolName ? `[user tool result] ${toolName}` : "[user tool result]"}\n` +
                 `id: ${part.toolCallId}\n` +
                 `status: ${part.ok ? "success" : "failure"}\n` +
-                `content:\n${part.content}`,
+                `content:\n${blocksToText(part.content)}`,
             ),
           )
           break

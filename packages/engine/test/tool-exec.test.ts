@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
+import { blocksToText } from "@ronde/core/block"
 import { err, ok } from "@ronde/core/result"
 import { toolCallPart } from "@ronde/core/message"
 import { merge, tool } from "@ronde/core/toolkit"
@@ -102,7 +103,7 @@ describe("@ronde/engine executeToolCalls", () => {
       ),
     )
 
-    expect(settled!.content).toBe("fmt:hello")
+    expect(blocksToText(settled!.content)).toBe("fmt:hello")
     expect(settled!.result).toEqual(ok({ echoed: "hello" }))
   })
 
@@ -136,9 +137,10 @@ describe("@ronde/engine executeToolCalls", () => {
       ),
     )
 
-    expect(settled!.content.startsWith("x".repeat(50))).toBe(true)
-    expect(settled!.content).toContain("150 characters truncated")
-    expect(settled!.content).toContain("[Full output at memory://spill/1")
+    const settledText = blocksToText(settled!.content)
+    expect(settledText.startsWith("x".repeat(50))).toBe(true)
+    expect(settledText).toContain("150 characters truncated")
+    expect(settledText).toContain("[Full output at memory://spill/1")
     expect(workspace.spills).toHaveLength(1)
   })
 
@@ -174,7 +176,10 @@ describe("@ronde/engine executeToolCalls", () => {
       ),
     )
 
-    expect(resultsOnly(events).map((e) => e.content)).toEqual(["fast", "slow"])
+    expect(resultsOnly(events).map((e) => blocksToText(e.content))).toEqual([
+      "fast",
+      "slow",
+    ])
   })
 
   it("respects approval decisions before execution", async () => {
@@ -204,7 +209,7 @@ describe("@ronde/engine executeToolCalls", () => {
     )
 
     expect(settled!.result.ok).toBe(false)
-    expect(settled!.content).toBe('Tool call "echo" was rejected')
+    expect(blocksToText(settled!.content)).toBe('Tool call "echo" was rejected')
   })
 
   it("does not abort siblings when a tool returns err()", async () => {
@@ -475,7 +480,10 @@ describe("@ronde/engine executeToolCalls — cancellation", () => {
     )
 
     expect(results.map((r) => r.result.ok)).toEqual([false, false])
-    expect(results.map((r) => r.content)).toEqual(["Cancelled", "Cancelled"])
+    expect(results.map((r) => blocksToText(r.content))).toEqual([
+      "Cancelled",
+      "Cancelled",
+    ])
   })
 
   it("synthesizes Cancelled for tools interrupted mid-execution", async () => {
@@ -515,7 +523,7 @@ describe("@ronde/engine executeToolCalls — cancellation", () => {
     const results = resultsOnly(events)
     expect(results).toHaveLength(1)
     expect(results[0]!.result.ok).toBe(false)
-    expect(results[0]!.content).toBe("Cancelled")
+    expect(blocksToText(results[0]!.content)).toBe("Cancelled")
   })
 
   it("falls back to best-effort content if the formatter throws", async () => {
@@ -547,7 +555,8 @@ describe("@ronde/engine executeToolCalls — cancellation", () => {
     )
 
     expect(settled!.result.ok).toBe(false)
-    expect(settled!.content).toContain("Formatter failed")
-    expect(settled!.content).toContain("format failed")
+    const settledText = blocksToText(settled!.content)
+    expect(settledText).toContain("Formatter failed")
+    expect(settledText).toContain("format failed")
   })
 })

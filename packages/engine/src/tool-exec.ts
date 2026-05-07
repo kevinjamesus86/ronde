@@ -1,3 +1,4 @@
+import { type Block, text } from "@ronde/core/block"
 import { err } from "@ronde/core/result"
 import { type Message, type ToolCallPart } from "@ronde/core/message"
 import type { ToolCall } from "@ronde/core/tool"
@@ -26,7 +27,7 @@ export interface ExecuteToolCallsInput<W extends Workspace> {
 
 type Settled = {
   result: ToolResult
-  content: string
+  content: Block[]
 }
 
 const ABORTED = Symbol("aborted")
@@ -109,18 +110,20 @@ export async function* executeToolCalls<W extends Workspace>(
 
   async function finalize(i: number, result: ToolResult): Promise<void> {
     const tc = calls[i]!
-    let content: string
+    let content: Block[]
     try {
-      content = await formatToolResult(toolkit, tc.name, result, {
+      const formatted = await formatToolResult(toolkit, tc.name, result, {
         workspace,
         toolUseId: tc.toolCallId,
         maxInline,
       })
+      content = [text(formatted)]
     } catch (e) {
       // Formatter failure cannot orphan a tool pair — the model needs
       // a result for every tool_use.
-      content = `Formatter failed: ${(e as Error).message}`
-      result = err(content)
+      const msg = `Formatter failed: ${(e as Error).message}`
+      content = [text(msg)]
+      result = err(msg)
     }
     settled[i] = { result, content }
   }

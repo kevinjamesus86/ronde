@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { text } from "@ronde/core/block"
 import {
   CompletionErrorKind,
   StopReason,
@@ -128,7 +129,7 @@ describe("@ronde/providers anthropic backend", () => {
             type: MessageType.ToolResult,
             toolCallId: "call-1",
             ok: true,
-            content: "first",
+            content: [text("first")],
           },
         ],
       },
@@ -143,7 +144,7 @@ describe("@ronde/providers anthropic backend", () => {
             type: MessageType.ToolResult,
             toolCallId: "call-2",
             ok: true,
-            content: "second",
+            content: [text("second")],
           },
         ],
       },

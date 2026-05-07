@@ -41,6 +41,7 @@ import {
   type ToolSchema,
   type UsageStats,
 } from "@ronde/core/completion"
+import { blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -179,13 +180,14 @@ function convertMessages(messages: Message[]): AiSdkMessage[] {
       } else if (part.type === MessageType.ToolResult) {
         const slot = ensure("user")
         if (slot?.kind === "user") {
+          const text = blocksToText(part.content)
           slot.toolResults.push({
             type: "tool-result",
             toolCallId: part.toolCallId,
             toolName: toolNamesById.get(part.toolCallId) ?? part.toolCallId,
             output: part.ok
-              ? { type: "text", value: part.content }
-              : { type: "error-text", value: part.content },
+              ? { type: "text", value: text }
+              : { type: "error-text", value: text },
           })
         }
       }

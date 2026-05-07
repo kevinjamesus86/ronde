@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
+import { text } from "@ronde/core/block"
 import { StopReason, emptyUsage } from "@ronde/core/completion"
 import { MessageType, Role, userMessage } from "@ronde/core/message"
 import { JournalEvent } from "@ronde/core/journal"
@@ -248,7 +249,7 @@ describe("@ronde/engine startup coherence", () => {
             type: MessageType.ToolResult,
             toolCallId: "call-1",
             ok: true,
-            content: "done",
+            content: [text("done")],
           },
         ],
       }),
@@ -285,7 +286,7 @@ describe("@ronde/engine startup coherence", () => {
               type: MessageType.ToolResult,
               toolCallId: id,
               ok: true,
-              content: `done-${id}`,
+              content: [text(`done-${id}`)],
             },
           ],
         }),
@@ -334,7 +335,7 @@ describe("@ronde/engine startup coherence", () => {
             type: MessageType.ToolResult,
             toolCallId: "complete-1",
             ok: true,
-            content: "done",
+            content: [text("done")],
           },
         ],
       }),

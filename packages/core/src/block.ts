@@ -81,3 +81,35 @@ export function ref(
     ...(opts.summary === undefined ? {} : { summary: opts.summary }),
   }
 }
+
+/**
+ * Lossy projection of `Block[]` to a single string, used by code that
+ * still operates on text — token estimation, debug rendering, replay
+ * display. Text blocks pass through; binary and ref blocks render as
+ * compact placeholders so size estimates remain meaningful.
+ */
+export function blocksToText(blocks: readonly Block[]): string {
+  const parts: string[] = []
+  for (const b of blocks) {
+    switch (b.kind) {
+      case BlockKind.Text:
+        parts.push(b.text)
+        break
+      case BlockKind.Binary: {
+        const label = b.filename ?? b.mediaType
+        parts.push(`[${b.mediaType} ${label}]`)
+        break
+      }
+      case BlockKind.Ref: {
+        const summary = b.summary ?? `${b.bytes ?? "?"} bytes`
+        parts.push(`[${b.mediaType ?? "ref"} ${b.uri} (${summary})]`)
+        break
+      }
+      default: {
+        const _: never = b
+        throw new Error(`unreachable: ${_}`)
+      }
+    }
+  }
+  return parts.join("\n")
+}

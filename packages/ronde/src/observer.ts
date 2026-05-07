@@ -1,3 +1,4 @@
+import type { Block } from "@ronde/core/block"
 import type { ToolCall } from "@ronde/core/tool"
 import type { ToolResult } from "@ronde/core/toolkit"
 import type { UsageStats } from "@ronde/core/completion"
@@ -17,7 +18,7 @@ export interface RunObserver {
   onToolResult?(
     turn: number,
     toolCall: ToolCall,
-    content: string,
+    content: Block[],
     result: ToolResult,
   ): void
   onCompactionStart?(turn: number, historyLength: number): void

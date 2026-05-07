@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { ref, text } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -39,7 +40,22 @@ describe("@ronde/core message constructors", () => {
           type: MessageType.ToolResult,
           toolCallId: "call-1",
           ok: true,
-          content: "done",
+          content: [text("done")],
+        },
+      ],
+    })
+  })
+
+  it("toolResultMessage accepts pre-built Block[]", () => {
+    expect(
+      toolResultMessage("call-1", true, [text("a"), ref("file:///x")]),
+    ).toEqual({
+      parts: [
+        {
+          type: MessageType.ToolResult,
+          toolCallId: "call-1",
+          ok: true,
+          content: [text("a"), ref("file:///x")],
         },
       ],
     })
@@ -82,7 +98,7 @@ describe("@ronde/core message constructors", () => {
       type: MessageType.ToolResult,
       toolCallId: "call-1",
       ok: false,
-      content: "failed",
+      content: [text("failed")],
       meta: { stderr: "boom" },
     })
   })
@@ -129,7 +145,7 @@ describe("@ronde/core canonical message shape", () => {
       toolResultPart({
         toolCallId: "call-1",
         ok: true,
-        content: "ok",
+        content: [text("ok")],
       }),
     ).not.toHaveProperty("meta")
   })

@@ -5,6 +5,7 @@ import {
   emptyUsage,
   StopReason,
 } from "@ronde/core/completion"
+import { text } from "@ronde/core/block"
 import { MessageType, partRole, Role, userMessage } from "@ronde/core/message"
 import { DefaultCompactionStrategy } from "../src/compaction.js"
 import { mockBackend, textResponse } from "./support.js"
@@ -117,7 +118,7 @@ describe("@ronde DefaultCompactionStrategy", () => {
             {
               type: MessageType.ToolResult,
               toolCallId: "call_1",
-              content: "result",
+              content: [text("result")],
               ok: true,
             },
           ],

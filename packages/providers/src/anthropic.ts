@@ -22,6 +22,7 @@ import {
   type ToolSchema,
 } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
+import { blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -106,7 +107,7 @@ function serializePart(
       return {
         type: "tool_result",
         tool_use_id: part.toolCallId,
-        content: part.content,
+        content: blocksToText(part.content),
         is_error: !part.ok,
       }
   }

@@ -10,6 +10,7 @@ import {
   type ToolSchema,
   type UsageStats,
 } from "@ronde/core/completion"
+import { type Block, blocksToText } from "@ronde/core/block"
 import {
   MessageType,
   Role,
@@ -596,7 +597,7 @@ export async function* engine<W extends Workspace = Workspace>(
         )
         const settledByCallId = new Map<
           string,
-          { content: string; result: ToolResult }
+          { content: Block[]; result: ToolResult }
         >()
 
         for await (const event of executeToolCalls({
@@ -622,7 +623,7 @@ export async function* engine<W extends Workspace = Workspace>(
             })
             // Args already counted in response.outputTokens — only
             // the result content adds new pressure.
-            runningEstimate += estimateTokens(event.content)
+            runningEstimate += estimateTokens(blocksToText(event.content))
             const pair: Message = { parts: [toolUse, resultPart] }
             if (
               buffered.length === 0 &&

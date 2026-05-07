@@ -17,6 +17,7 @@ import {
   type ToolSchema,
 } from "@ronde/core/completion"
 import type { Lax } from "@ronde/core"
+import { blocksToText } from "@ronde/core/block"
 import { estimateTokens } from "@ronde/core/tokens"
 import {
   MessageType,
@@ -112,7 +113,8 @@ function serializePart(
         },
         ...(part.meta ? { thoughtSignature: part.meta.thoughtSignature } : {}),
       }
-    case MessageType.ToolResult:
+    case MessageType.ToolResult: {
+      const text = blocksToText(part.content)
       return {
         functionResponse: {
           id: part.toolCallId,
@@ -120,14 +122,15 @@ function serializePart(
           response: !part.ok
             ? {
                 toolCallId: part.toolCallId,
-                error: part.content,
+                error: text,
               }
             : {
                 toolCallId: part.toolCallId,
-                content: part.content,
+                content: text,
               },
         },
       }
+    }
   }
 }
 

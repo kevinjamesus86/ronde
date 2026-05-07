@@ -7,6 +7,7 @@ import type {
   UsageStats,
 } from "@ronde/core/completion"
 export type { SettleReason } from "@ronde/core/completion"
+import type { Block } from "@ronde/core/block"
 import type { Message } from "@ronde/core/message"
 import type { Awaitable, Lax } from "@ronde/core"
 import type { ToolCall } from "@ronde/core/tool"
@@ -84,8 +85,8 @@ export interface AgentStepToolCall {
   id: string
   name: string
   args: Record<string, unknown>
-  /** Formatted content the model saw — same string as the tool_result part. */
-  content: string
+  /** Formatted content the model saw — same blocks as the tool_result part. */
+  content: Block[]
   /** Raw structured exec return, `ok(data)` or `err(msg)`. Trajectory only — never journaled. */
   result: ToolResult
 }
@@ -121,8 +122,8 @@ export type ProgressEvents = {
   tool_result: {
     turn: number
     call: ToolCall
-    /** Formatted string the model sees — journaled as the ToolResultPart content. */
-    content: string
+    /** Formatted blocks the model sees — journaled as the ToolResultPart content. */
+    content: Block[]
     /** Raw structured exec return. Never journaled. */
     result: ToolResult
   }

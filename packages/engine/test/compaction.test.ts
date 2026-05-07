@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
+import { text } from "@ronde/core/block"
 import { StopReason, emptyUsage } from "@ronde/core/completion"
 import { MessageType, Role, userMessage } from "@ronde/core/message"
 import { ok } from "@ronde/core/result"
@@ -493,7 +494,7 @@ describe("@ronde/engine deferred replay", () => {
           type: MessageType.ToolResult as const,
           toolCallId: "call_prior",
           ok: true,
-          content: "prior result",
+          content: [text("prior result")],
         },
       ],
     }

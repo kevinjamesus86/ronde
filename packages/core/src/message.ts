@@ -14,7 +14,14 @@
  * - `ToolResultPart`  — implicit: always user (tool outputs flow back to the model)
  *
  * Use `partRole(part)` to get a part's effective role.
+ *
+ * Tool result content is `Block[]` — the universal multimodal
+ * vocabulary defined in `block.ts`. Old serialized journals with
+ * `content: string` are normalized at scan time via
+ * `normalizeToolResultContent`.
  */
+
+import { type Block, text } from "./block.js"
 
 export const enum Role {
   User = "user",
@@ -59,7 +66,7 @@ export interface ToolResultPart {
   type: MessageType.ToolResult
   toolCallId: string
   ok: boolean
-  content: string
+  content: Block[]
   meta?: unknown
 }
 
@@ -113,7 +120,7 @@ export function assistantMessage(parts: MessagePart[], id?: string): Message {
 export function toolResultMessage(
   toolCallId: string,
   ok: boolean,
-  content: string,
+  content: string | Block[],
   meta?: unknown,
 ): Message {
   return {
@@ -160,14 +167,22 @@ export function toolCallPart(opts: {
 export function toolResultPart(opts: {
   toolCallId: string
   ok: boolean
-  content: string
+  content: string | Block[]
   meta?: unknown
 }): ToolResultPart {
   return {
     type: MessageType.ToolResult,
     toolCallId: opts.toolCallId,
     ok: opts.ok,
-    content: opts.content,
+    content: normalizeToolResultContent(opts.content),
     ...(opts.meta === undefined ? {} : { meta: opts.meta }),
   }
+}
+
+/**
+ * Lift legacy `string` tool-result content to `Block[]`. Used by
+ * constructors and by journal scanners reading pre-Block journals.
+ */
+export function normalizeToolResultContent(content: string | Block[]): Block[] {
+  return typeof content === "string" ? [text(content)] : content
 }
