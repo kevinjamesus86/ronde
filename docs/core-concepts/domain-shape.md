@@ -318,9 +318,12 @@ nothing outside `@ronde/fs` should care about.
 
 Owns artifact persistence:
 
-- `spill(content, opts?)` persists the content and returns `{ uri, bytes }`
-- expose backend-specific capabilities where needed (e.g. `dir` on
-  `DirectoryWorkspace`)
+- `spill(content, opts?)` persists `string | Uint8Array` and returns
+  `{ uri, bytes }`. `opts.mediaType` selects file extensions in
+  fs-backed implementations and rides through into resulting `ref`
+  blocks during spill substitution.
+- exposes backend-specific capabilities where needed (e.g. `dir` on
+  fs-backed implementations — checked structurally at the call site)
 
 Does not own:
 
@@ -330,23 +333,40 @@ Does not own:
 - truncation, preview construction, or size policy — those are
   framework concerns (see "Tool output pipeline" in architecture.md)
 
+### `Block`
+
+The universal content vocabulary used by `ContentPart`,
+`ToolResultPart`, and the format pipeline. Three variants:
+
+- `text { kind: "text", text }` — UTF-8 prose
+- `binary { kind: "binary", data: string | URL, mediaType, filename? }`
+  — discriminated by `mediaType` (image/audio/file all collapse here)
+- `ref { kind: "ref", uri, mediaType?, bytes?, summary? }` — addressable
+  handle, used by spill substitution and for inputs that live elsewhere
+
+Provider adapters route on `block.kind` and `mediaType`. Spill
+substitution (engine-side) replaces oversized blocks with `ref`
+variants pointing at the workspace artifact.
+
 ### `Toolkit`
 
 Owns tool surface and execution:
 
 - tool schemas
 - named tool execution (`execute` returns domain-shaped data)
-- output formatting (`format` renders data to the model-facing string)
+- output formatting (`format` renders data to `string | Block[]`)
 - per-tool truncation strategy declaration (`truncate: "head" | "tail"
-| "middle"`)
+| "middle"` — text-block-specific policy under the substitution model)
 
 Does not own:
 
 - history durability
 - runtime creation
 - provider calls
-- size governance of rendered output — the framework cuts oversized
-  formatted strings, spills them, and appends a neutral hint
+- size governance of formatted blocks — the framework runs
+  content-substitution per block: oversized text gets sliced + a
+  trailing ref block; oversized binary gets spilled and replaced with
+  a ref block; existing ref blocks pass through.
 
 ### `CompletionBackend`
 

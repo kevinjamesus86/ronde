@@ -388,30 +388,33 @@ Tool output flows through three responsibilities, each owned by a
 different layer:
 
 ```text
-tool.execute(args, ctx)  →  domain data          (tool)
-tool.format(data)        →  rendered string      (tool)
-framework                →  size governance      (engine + workspace)
+tool.execute(args, ctx)  →  domain data            (tool)
+tool.format(data)        →  string | Block[]       (tool)
+framework                →  size governance        (engine + workspace)
+                            via content-substitution
 ```
 
 A tool's `execute` returns purely domain-shaped data. Its `format`
-renders that data to the string the model reads. Neither concerns
-itself with how big the string is. The framework layer caps inline
-size, spills the full text to the workspace, slices the rendered
-output per the tool's declared `truncate` strategy, and appends a
-neutral hint pointing at the spill URI.
+renders that data into the model-facing content — a `string` for the
+90% (text-only) case, or `Block[]` for multimodal output (text +
+image + ref + …). The framework layer caps inline size by walking
+the formatted block array and substituting oversized blocks with
+`ref` blocks pointing at workspace artifacts.
 
 ```text
 formatToolResult(toolkit, name, result, { workspace, toolUseId, maxInline })
     |
-    → formatter renders data → string
-    → if string <= maxInline  → pass through
-    → else:
-        workspace.spill(string) → { uri, bytes }
-        sliceByStrategy(string, maxInline, toolkit.truncate[name] ?? "head")
-        append "[Full output at <uri> (<bytes> bytes).]"
+    → formatter renders data → string | Block[]
+    → normalize string to [text(s)]
+    → fitBlocksToBudget — per block:
+        text   over budget → slice (head/tail/middle) + summary,
+                              then ref(uri, bytes, summary) sibling
+        binary over budget → workspace.spill(bytes, { mediaType })
+                              → ref(uri, mediaType, bytes, filename?)
+        ref               → pass through (already a handle)
 ```
 
-Tools declare their preferred cut at the definition site:
+Tools declare their preferred text-truncation cut at the definition site:
 
 ```ts
 tool({
@@ -422,11 +425,12 @@ tool({
 })
 ```
 
-Three strategies are supported: `"head"` (default — keep the
-beginning), `"tail"` (keep the end), `"middle"` (keep both ends).
-The cut walks up to 200 chars in the chosen direction to snap to a
-newline boundary; pathological long lines fall through to an exact
-char-index cut.
+Three strategies are supported for text blocks: `"head"` (default —
+keep the beginning), `"tail"` (keep the end), `"middle"` (keep both
+ends). The cut walks up to 200 chars in the chosen direction to
+snap to a newline boundary; pathological long lines fall through to
+an exact char-index cut. Binary blocks don't slice — they spill
+whole and become refs.
 
 Callers can override the inline budget per run:
 
@@ -439,15 +443,17 @@ engine(backend, {
 })
 ```
 
-The neutral hint deliberately never names a specific tool ("Use
-`read_file`..."). That coupling would bake the framework into one
-toolkit's idioms; the model figures out which of its tools can read
-the spill URI from its own toolkit schemas.
+Substitution hints ride inside `ref` block summaries — `"truncated
+to first 25000 of 187432 bytes"` and similar. They never name a
+specific tool ("Use `read_file`..."). The framework owns no
+toolkit; the model figures out which of its tools can read the
+spilled URI from its toolkit schemas.
 
-Artifact-producing tools (rare edge cases — image generation, binary
-exports) that genuinely need to persist beyond their formatter
-output reach for `ctx.workspace.spill(content, { name })` directly.
-The common-case tool never touches the workspace.
+Artifact-producing tools (image generation, binary exports, log
+tails that bypass the engine's spill round-trip) reach for
+`ctx.workspace.spill(content, { name, mediaType })` directly and
+emit a `ref` block from their formatter. Common-case text tools
+never touch the workspace.
 
 ### Engine events
 
