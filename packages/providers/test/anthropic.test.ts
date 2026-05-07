@@ -192,6 +192,38 @@ describe("@ronde/providers anthropic backend", () => {
     ])
   })
 
+  it("routes multimodal ContentPart blocks into Anthropic content shapes", () => {
+    const payload = serializeMessages([
+      userMessage([
+        text("Here's the chart you asked about:"),
+        image("aGVsbG8=", "image/png"),
+        ref("file:///workspace/data.pdf", {
+          mediaType: "application/pdf",
+          bytes: 12_345,
+        }),
+      ]),
+    ])
+
+    expect(payload[0]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "Here's the chart you asked about:" },
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: "image/png",
+            data: "aGVsbG8=",
+          },
+        },
+        {
+          type: "text",
+          text: "[application/pdf file:///workspace/data.pdf (12345 bytes)]",
+        },
+      ],
+    })
+  })
+
   it("routes multimodal tool-result blocks into Anthropic content shapes", () => {
     const payload = serializeMessages([
       assistantMessage([

@@ -59,7 +59,7 @@ export function canonicalize<M>(
 export function coalesceByRole<M, T>(
   messages: NormalizedMessage<M>[],
   mapRole: (role: Role) => string,
-  serializePart: (part: NormalizedPart<M>) => T | undefined,
+  serializePart: (part: NormalizedPart<M>) => T | T[] | undefined,
 ): Array<{ role: string; parts: T[] }> {
   const output: Array<{ role: string; parts: T[] }> = []
   const assistantRole = mapRole(Role.Assistant)
@@ -92,14 +92,18 @@ export function coalesceByRole<M, T>(
       if (serialized === undefined) {
         continue
       }
+      const items = Array.isArray(serialized) ? serialized : [serialized]
+      if (items.length === 0) {
+        continue
+      }
 
       if (part.type === MessageType.ToolUse) {
-        pooledUses.push(serialized)
+        pooledUses.push(...items)
       } else if (part.type === MessageType.ToolResult) {
-        pooledResults.push(serialized)
+        pooledResults.push(...items)
       } else {
         flushTools()
-        pushBucket(mapRole(partRole(part)), [serialized])
+        pushBucket(mapRole(partRole(part)), items)
       }
     }
   }

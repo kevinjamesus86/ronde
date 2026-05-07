@@ -79,10 +79,10 @@ function anthropicRole(role: Role): "assistant" | "user" {
 function serializePart(
   part: NormalizedPart<AnthropicMeta>,
   toolNamesById: Map<string, string>,
-): Record<string, unknown> | undefined {
+): Record<string, unknown> | Record<string, unknown>[] | undefined {
   switch (part.type) {
     case MessageType.Content:
-      return { type: "text", text: blocksToText(part.content) }
+      return blocksToAnthropicContent(part.content)
     case MessageType.Think:
       if (part.meta) {
         return {
@@ -114,13 +114,14 @@ function serializePart(
 }
 
 /**
- * Map a `Block[]` to Anthropic's per-block tool_result content array.
+ * Map a `Block[]` to Anthropic's per-block content array. Used both
+ * for ContentPart (user/assistant body) and ToolResultPart content.
  *
  * - text blocks → `{ type: "text", text }`
  * - binary blocks with image/* → `{ type: "image", source: { ... } }`
  * - binary blocks with application/pdf → `{ type: "document", source: { ... } }`
  * - other binary (audio, video, unknown) → text block describing the artifact
- *   (Anthropic doesn't accept those shapes in tool_result yet)
+ *   (Anthropic doesn't accept those shapes yet)
  * - ref blocks → text block summarizing the URI + size
  */
 function blocksToAnthropicContent(

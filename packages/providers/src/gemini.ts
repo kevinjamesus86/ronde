@@ -143,8 +143,10 @@ export function serializeMessages(messages: Message[]): Array<{
 }> {
   const normalized = canonicalize(messages, isGeminiMeta)
   const toolNamesById = new Map<string, string>()
-  return coalesceByRole(normalized, geminiRole, (part) =>
-    serializePart(part, toolNamesById),
+  return coalesceByRole<GeminiMeta, Record<string, unknown>>(
+    normalized,
+    geminiRole,
+    (part) => serializePart(part, toolNamesById),
   )
 }
 
