@@ -1,5 +1,6 @@
 export * from "./tool.js"
 export * from "./result.js"
+export * from "./block.js"
 export * from "./message.js"
 export * from "./completion.js"
 export * from "./journal.js"
