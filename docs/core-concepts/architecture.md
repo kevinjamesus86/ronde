@@ -76,8 +76,9 @@ The `packages/*` tree is the canonical architecture and build source of truth.
 ```text
 packages/
   core/
-    completion.ts   journal.ts   message.ts   workspace.ts
-    runtime.ts      toolkit.ts   tool.ts      result.ts
+    block.ts        completion.ts  journal.ts   message.ts
+    workspace.ts    runtime.ts     toolkit.ts   tool.ts
+    result.ts
 
   engine/
     engine.ts       types.ts     compaction.ts
