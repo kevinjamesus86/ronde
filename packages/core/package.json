@@ -32,6 +32,10 @@
       "types": "./dist/workspace.d.mts",
       "default": "./dist/workspace.mjs"
     },
+    "./block": {
+      "types": "./dist/block.d.mts",
+      "default": "./dist/block.mjs"
+    },
     "./runtime": {
       "types": "./dist/runtime.d.mts",
       "default": "./dist/runtime.mjs"

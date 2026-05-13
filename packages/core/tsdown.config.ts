@@ -9,6 +9,7 @@ export default packageConfig({
     completion: "src/completion.ts",
     journal: "src/journal.ts",
     workspace: "src/workspace.ts",
+    block: "src/block.ts",
     runtime: "src/runtime.ts",
     toolkit: "src/toolkit.ts",
     stream: "src/stream.ts",
