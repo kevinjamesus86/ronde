@@ -918,11 +918,17 @@ class RecordingWorkspace extends Workspace {
   readonly kind = "test-workspace"
   readonly spills: SpillOpts[] = []
 
-  async spill(content: string, opts: SpillOpts = {}): Promise<SpillResult> {
+  async spill(
+    content: string | Uint8Array,
+    opts: SpillOpts = {},
+  ): Promise<SpillResult> {
     this.spills.push(opts)
     return {
       uri: "memory://spill",
-      bytes: utf8ByteLength(content),
+      bytes:
+        typeof content === "string"
+          ? utf8ByteLength(content)
+          : content.byteLength,
     }
   }
 }

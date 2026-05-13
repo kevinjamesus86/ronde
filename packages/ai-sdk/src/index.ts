@@ -115,7 +115,11 @@ function blocksToToolResultOutput(
         }
         break
       case BlockKind.Ref:
-        value.push({ type: "file-url", url: b.uri })
+        if (tryParseUrl(b.uri)) {
+          value.push({ type: "file-url", url: b.uri })
+        } else {
+          value.push({ type: "text", text: refDescriptor(b) })
+        }
         break
       default: {
         const _: never = b
@@ -126,13 +130,27 @@ function blocksToToolResultOutput(
   return { type: "content", value }
 }
 
+function tryParseUrl(uri: string): URL | undefined {
+  try {
+    return new URL(uri)
+  } catch {
+    return undefined
+  }
+}
+
+function refDescriptor(b: Extract<Block, { kind: BlockKind.Ref }>): string {
+  const summary = b.summary ?? `${b.bytes ?? "?"} bytes`
+  return `[${b.mediaType ?? "ref"} ${b.uri} (${summary})]`
+}
+
 /**
  * Map a `Block[]` from a ContentPart into AI SDK's user/assistant
  * content vocabulary — `TextPart | FilePart`.
  *
  * - text   → { type: "text", text }
  * - binary → { type: "file", mediaType, data, filename? }
- * - ref    → { type: "file", mediaType?, data: new URL(uri) }
+ * - ref    → { type: "file", mediaType?, data: new URL(uri) } when the
+ *            URI parses; otherwise a text descriptor with the URI.
  */
 function blocksToAiSdkContent(blocks: readonly Block[]): AiSdkUserPart[] {
   const out: AiSdkUserPart[] = []
@@ -153,13 +171,19 @@ function blocksToAiSdkContent(blocks: readonly Block[]): AiSdkUserPart[] {
         out.push(part)
         break
       }
-      case BlockKind.Ref:
-        out.push({
-          type: "file",
-          data: new URL(b.uri),
-          mediaType: b.mediaType ?? "application/octet-stream",
-        })
+      case BlockKind.Ref: {
+        const parsed = tryParseUrl(b.uri)
+        if (parsed) {
+          out.push({
+            type: "file",
+            data: parsed,
+            mediaType: b.mediaType ?? "application/octet-stream",
+          })
+        } else {
+          out.push({ type: "text", text: refDescriptor(b) })
+        }
         break
+      }
       default: {
         const _: never = b
         throw new Error(`unreachable: ${_}`)

@@ -219,18 +219,20 @@ interface FitOpts {
 }
 
 /**
- * Walk a `Block[]` and bring its inline size within budget. Per-block
- * policy:
+ * Walk a `Block[]` and bring its inline size within budget in a
+ * single forward pass. Per-block policy:
  *
- * - text > per-block ceiling: slice with the truncation strategy and
+ * - text > remaining budget: slice with the truncation strategy and
  *   append a hint ref block with the spilled artifact URI.
- * - binary > per-block ceiling: spill the bytes to the workspace,
+ * - binary > remaining budget: spill the bytes to the workspace,
  *   replace with a ref block carrying the URI + mediaType + summary.
+ *   URL-form binary collapses to a ref using the URL as the URI —
+ *   no spill, since it's already external.
  * - ref: passes through (already an addressable handle).
  *
- * The total inline size across all blocks is bounded by `budget`. If
- * the sum exceeds budget after per-block decisions, additional binary
- * blocks are substituted to a ref largest-first until under budget.
+ * `remaining` decreases as fitted blocks are emitted, so blocks that
+ * arrive after the budget is exhausted hit their over-budget branch
+ * automatically. No second pass.
  */
 async function fitBlocksToBudget(
   blocks: Block[],
@@ -367,6 +369,7 @@ function inlineByteSize(block: Block): number {
       return utf8Size(block.text)
     case BlockKind.Binary: {
       if (block.data instanceof URL) {
+        // URL is fetched out-of-band by the provider — no inline cost.
         return 0
       }
       // base64 expansion: 4 chars encode 3 bytes — but for budget

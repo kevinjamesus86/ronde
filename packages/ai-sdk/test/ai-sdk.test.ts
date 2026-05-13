@@ -619,7 +619,7 @@ describe("@ronde/ai-sdk response conversion", () => {
 })
 
 describe("@ronde/ai-sdk adapter", () => {
-  it("wraps a LanguageModelV4 into a configured backend", () => {
+  it("wraps a LanguageModelV3 into a configured backend", () => {
     const backend = fromAiSdk(
       mockAiSdkModel(() => ({
         content: [],

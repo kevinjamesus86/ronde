@@ -131,7 +131,9 @@ function blocksToAnthropicContent(
   for (const block of blocks) {
     switch (block.kind) {
       case BlockKind.Text:
-        out.push({ type: "text", text: block.text })
+        if (block.text.length > 0) {
+          out.push({ type: "text", text: block.text })
+        }
         break
       case BlockKind.Binary: {
         const source =
