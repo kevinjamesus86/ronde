@@ -115,6 +115,34 @@ The discriminated-union discipline keeps the `spilled` and `inline`
 branches obvious — no `field?:` pile-up, no nullable URIs that
 "exist sometimes."
 
+### Composing toolkits
+
+`merge(...toolkits)` combines any number of `Toolkit` values into one.
+Schemas, formatters, truncate strategies, and dispose hooks are all
+pooled. Name collisions resolve right-most-wins — useful for overriding
+a single tool out of a larger pack.
+
+```ts
+import { coreTools, merge, tool, ok } from "ronde"
+import { z } from "zod"
+
+const wordCount = tool({
+  /* ... */
+})
+const customGrep = tool({ name: "grep_files" /* ... */ })
+
+// Extend coreTools with a new tool.
+const tools = merge(coreTools({ roots: [process.cwd()] }), wordCount)
+
+// Override a coreTool by name (right-most-wins).
+const overridden = merge(coreTools({ roots: [process.cwd()] }), customGrep)
+```
+
+Each constituent toolkit keeps its own runtime cell, so stateful tools
+inside one toolkit don't interfere with stateful tools inside another.
+Disposing the merged toolkit disposes each child; a child's dispose error
+doesn't block siblings.
+
 ### What doesn't change between tiers
 
 - `execute` returns `ToolResult<D>` — `ok(data) | err(msg)`.

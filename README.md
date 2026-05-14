@@ -1,6 +1,6 @@
 # ronde
 
-Agentic loop framework for TypeScript. Multi-provider, composable tools, structured observability.
+Agentic loop framework for TypeScript. Multi-provider, composable tools, durable runtime, multimodal content, structured observability.
 
 ```bash
 npm install github:<user>/ronde#release/vX.Y.Z
@@ -8,13 +8,43 @@ npm install github:<user>/ronde#release/vX.Y.Z
 
 > **Not on npm.** `ronde` is not published to the npm registry — `npm install ronde` will not find this package. Install from a `release/vX.Y.Z` GitHub branch instead. Each release branch ships pre-built `dist/` and the native `.node` binding, so consumers install with no Rust toolchain and no bundler.
 
+### Quickstart
+
+```ts
+import { agentic, coreTools } from "ronde"
+
+const { steps } = await agentic({
+  model: "anthropic/claude-sonnet-4-6",
+  prompt: "List the TypeScript files in src/ and count their lines.",
+  tools: coreTools({ roots: [process.cwd()] }),
+})
+
+console.log(steps.at(-1)?.text)
+```
+
+That's it — no manual runtime setup, no context wiring. The default managed runtime journals every run under `~/.ronde/<project>/<entry>/`. Resume any run with a single line:
+
+```ts
+import { resume, agentic } from "ronde"
+
+const runtime = await resume() // most recent run
+await agentic({
+  runtime,
+  model: "anthropic/claude-sonnet-4-6",
+  prompt: "continue",
+})
+```
+
+Walk-through with tools, streaming, and resume → [Getting started](./docs/getting-started.md).
+
 ### Documentation
 
-The canonical references are:
-
-- [Architecture](./docs/core-concepts/architecture.md) — package boundaries, engine semantics, and runtime layering
-- [Domain Shape](./docs/core-concepts/domain-shape.md) — primitive ownership and responsibility split
-- [CLAUDE](./CLAUDE.md) — contributor-facing commands, architecture notes, and working conventions
+- [**Getting started**](./docs/getting-started.md) — install → first agent → tools → streaming → resume
+- [Tool authoring](./docs/tool-authoring.md) — three tiers: text-only, multimodal, self-spilling
+- [Architecture](./docs/core-concepts/architecture.md) — package boundaries, engine semantics, runtime layering
+- [Domain shape](./docs/core-concepts/domain-shape.md) — primitive ownership and responsibility split
+- [Sandbox as tool](./docs/patterns/sandbox-as-tool.md) — wrapping a remote sandbox as a multimodal toolkit
+- [CLAUDE](./CLAUDE.md) — contributor-facing commands, conventions, and working notes
 
 ### Development
 
