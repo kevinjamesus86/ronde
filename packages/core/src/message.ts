@@ -15,8 +15,22 @@
  *
  * Use `partRole(part)` to get a part's effective role.
  *
- * `ContentPart` and `ToolResultPart` carry `Block[]` — the universal
- * multimodal vocabulary defined in `block.ts`.
+ * Content shape follows part semantics, not symmetry:
+ *
+ * - `ContentPart` / `ToolResultPart` carry `Block[]` — communicative
+ *   content. The model produces and consumes mixed media (text,
+ *   images, files, refs); the world reports back the same way.
+ *   Multimodal is a first-class peer of text.
+ * - `ThinkingPart` carries `string` — reasoning is private text. No
+ *   current provider emits multimodal thinking, and the concept is
+ *   muddled (the model already saw the image in `ContentPart`).
+ *   Provider-specific opaque payloads — Anthropic `redacted_thinking`,
+ *   signatures — ride in `meta`.
+ * - `ToolCallPart` carries structured `arguments` — the model fills a
+ *   JSON schema. Arguments are typed input, not content.
+ *
+ * Don't widen `ThinkingPart` or `ToolCallPart` to `Block[]` for
+ * symmetry. Widen only if and when a provider drives a real need.
  */
 
 import { type Block, text } from "./block.js"
