@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.8.0
+
+[Compare v0.7.0…v0.8.0](https://github.com/kevinjamesus86/ronde/compare/v0.7.0...v0.8.0)
+
+Multimodal first-class. Tool output and message content travel as `Block[]` — a three-variant discriminated union (`text` | `binary` | `ref`) — and every provider adapter routes those blocks to native wire shapes. The engine's overflow protection generalizes from text truncation to per-block content-substitution: oversized binary spills as bytes and surfaces as a `ref`; oversized text slices and lands alongside its own `ref`; existing refs pass through.
+
+A second thread: deletions. `DirectoryWorkspace` and the `@ronde/mem` package were both category errors — one conflated the workspace contract with a local-fs capability, the other promised a spill URI that couldn't survive its own process. Both are gone.
+
+### Breaking changes
+
+- **Content vocabulary: `Block[]` replaces `string`** on `ContentPart` and `ToolResultPart`. The single-channel invariant stays — there is no second content field — but the channel now carries any of `text` / `binary` (image/audio/file) / `ref` blocks. Constructors (`userMessage`, `toolResultMessage`, `contentPart`, `toolResultPart`) accept `string | Block[]` as ergonomic sugar; the canonical store is always `Block[]`. Existing text-only consumers flatten at their boundary via `blocksToText`. ([`07cc671`](07cc671), [`3384354`](3384354))
+- **`TextPart` → `ContentPart`** and **`MessageType.Text` → `MessageType.Content`** in `@ronde/core/message`. The old name was load-bearing in the wrong way once content widened to multimodal. ([`7e644e9`](7e644e9))
+- **`DirectoryWorkspace` removed.** Tools type against `Workspace` directly. The contract is `spill`; capabilities like a local `dir` are structural at the call site (`"dir" in workspace`). ([`420aa46`](420aa46))
+- **`@ronde/mem` package removed.** An in-memory workspace can't satisfy spill's "durable handle" contract beyond a single process. If a future variant needs ephemeral journals, it belongs in `@ronde/fs`. ([`17ce05a`](17ce05a))
+- **`Workspace.spill(content, opts?)`** accepts `string | Uint8Array` (was string-only). FS-backed implementations write text as UTF-8 and bytes as-is; `opts.mediaType` selects file extensions. ([`b21a2d8`](b21a2d8))
+- **`PathSpillResult` collapsed into `SpillResult`.** One spill result type, `{ uri, bytes }`. ([`d70b2ba`](d70b2ba))
+- **`tool({ format })`** return type widened to `string | Block[]`. The string form is the 90% case; the framework wraps it as a single text block. Multimodal formatters return blocks directly. ([`07cc671`](07cc671))
+
+### Features
+
+- **`Block` content vocabulary** with constructors `text` / `image` / `audio` / `file` / `ref` exported from the root entry. `image` / `audio` / `file` produce the same `binary` block kind; the `mediaType` discriminates at the provider adapter. ([`68a1a52`](68a1a52))
+- **Multimodal tool results, end to end.** Tool emits `Block[]` → engine commits as the `tool_result` part's content → provider adapter routes blocks into native wire shapes. Anthropic emits `image` / `document` content blocks; OpenAI uses `input_image` / `input_file`; Gemini uses `inlineData` / `fileData`; AI SDK routes through `output: { type: "content", value: [...] }`. ([`e77e49c`](e77e49c), [`e734a76`](e734a76), [`5989039`](5989039), [`69f7e12`](69f7e12), [`d8456b7`](d8456b7))
+- **Content-substitution overflow protection.** `fitBlocksToBudget` walks formatted blocks per-block: oversized text slices with the tool's head/tail/middle strategy + a sibling `ref` carrying the spilled URI; oversized binary spills as bytes and replaces with a `ref`; URL-form binary collapses to a `ref` without spilling; existing refs pass through. ([`cc2b6ea`](cc2b6ea))
+- **`@ronde/ai-sdk` adapter.** `fromAiSdk(model)` wraps any `@ai-sdk/provider` `LanguageModelV3` into a ronde `CompletionBackend`, giving access to the wider AI SDK ecosystem (50+ providers). Opt-in dependency, not bundled into `ronde`. ([`69f7e12`](69f7e12))
+- **`@ronde/core/block` subpath export.** Block vocabulary accessible to consumers via `@ronde/core/block`. ([`b27facf`](b27facf))
+
+### Documentation
+
+- New [getting-started.md](./docs/getting-started.md) — install, first agent, tools (with extending `coreTools` via `merge()`), streaming, resume, escape hatch to raw `engine()`.
+- New [tool-authoring.md](./docs/tool-authoring.md) — three tiers (text-only, multimodal, self-spilling), composition, block constructors.
+- New [sandbox-as-tool.md](./docs/patterns/sandbox-as-tool.md) — worked example wrapping a remote sandbox as a `Toolkit` returning `Block[]`.
+- README rewritten with a runnable quickstart and a doc index.
+- `message.ts` module comment now explains why each part's content shape differs: communicative content is `Block[]`, private reasoning is `string`, tool args are structured JSON.
+
+### Fixes
+
+- **Anthropic adapter** skips zero-length text blocks instead of shipping `{type:"text", text:""}` to the SDK.
+- **ai-sdk adapter** defends against non-URL-shaped `ref` URIs in both `ContentPart` and the tool-result envelope; falls back to a text descriptor.
+- **`fitBlocksToBudget` jsdoc** rewritten to describe the actual single-forward-pass behavior (the prior comment claimed a largest-first second pass that didn't exist).
+- **`@ronde/core/block` subpath export** added; was previously missing from the package map and would fail to resolve for downstream dist consumers even though internal imports worked. ([`b27facf`](b27facf))
+
 ## v0.7.0
 
 [Compare v0.6.0…v0.7.0](https://github.com/kevinjamesus86/ronde/compare/v0.6.0...v0.7.0)
