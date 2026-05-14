@@ -1,6 +1,6 @@
 {
   "name": "@ronde/backend",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
@@ -17,6 +17,6 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@ronde/core": "0.7.0"
+    "@ronde/core": "0.8.0"
   }
 }
